@@ -207,8 +207,9 @@ MUJOCO_GL=egl python -m fly.render --brain --ticks 10 --world flat \
     --source motor --haltere-gain 5.0 --out outputs/render/trial3.mp4
 ```
 
-which is 333 ms of simulation in an 8.4 s video: the fly drops the height of the
-frame, lands on its side, and goes on beating. Free, the `scene_cam` is parented
+which is 333 ms of simulation in an 8.4 s video — [`media/trial3.mp4`](media/trial3.mp4),
+checked in, 1.1 MB. The fly drops the height of the frame, lands on its side, and
+goes on beating. Free, the `scene_cam` is parented
 to the thorax in `trackcom`, so it follows the centre of mass while keeping a
 fixed world orientation — a tumbling fly tumbles on screen instead of appearing
 still while the world spins around it.
@@ -304,6 +305,7 @@ FlyGym downloads ~140 MB of meshes on first use and caches them.
 | `fly/play.py` | Headless run loop and JSON report |
 | `fly/render.py` | Video of a run; open-loop lift measurement |
 | `vendor/` | Wingbeat pattern generator, vendored from flybody |
+| `media/` | Checked-in renders referenced from this README |
 | `connectome_sim/` | The engine, as a submodule |
 
 ## License and attribution
