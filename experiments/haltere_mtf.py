@@ -54,6 +54,31 @@ def vector_strength(counts, t_s, f_hz):
     return float(abs((counts * phasor).sum()) / n)
 
 
+# Frequencies used to estimate the chance level *within* a trial.  A paired
+# control run is not enough: chance vector strength scales as 1/sqrt(N), so a
+# single-cell readout with a few dozen spikes has a floor near 0.2 while the
+# pooled readout with ~1800 spikes has one near 0.02.  Evaluating the same spike
+# train at frequencies it was not driven at gives a floor with the right spike
+# count by construction, for every group separately.
+NULL_HZ = (3., 7., 13., 23., 41., 67., 97., 149., 211., 293., 397., 499.)
+
+
+def null_distribution(counts, t_s, f_hz):
+    """Chance vector strength for this spike train, away from `f_hz`.
+
+    Excludes anything near the driven frequency or its low harmonics and
+    subharmonics, where real modulation power would leak in.
+    """
+    keep = []
+    for g in NULL_HZ:
+        if min(abs(g - k * f_hz) / max(k * f_hz, 1.0)
+               for k in (0.5, 1.0, 2.0, 3.0)) > 0.15:
+            keep.append(vector_strength(counts, t_s, g))
+    if not keep:
+        return 0.0, 0.0, 0
+    return float(np.mean(keep)), float(np.std(keep)), len(keep)
+
+
 def run(*, dataset="malecns_v1", frequencies=(5, 10, 30, 60, 120, 218, 400),
         baseline=BASELINE_MV, depth=DEPTH_MV, bin_ms=0.5, duration_ms=1000.0,
         out=ROOT / "outputs/haltere_mtf.json") -> dict:
@@ -85,34 +110,49 @@ def run(*, dataset="malecns_v1", frequencies=(5, 10, 30, 60, 120, 218, 400),
                 per_group[name][k] = c[idx].sum()
         return counts, per_group
 
+    def score(counts, f_hz):
+        """Vector strength against this train's own chance level.
+
+        z is what to read: how many standard deviations the driven frequency
+        stands above what the same spikes give at undriven frequencies.  r alone
+        is not comparable between a 1-cell and a 24-cell readout.
+        """
+        r = vector_strength(counts, t_s, f_hz)
+        mu, sd, n = null_distribution(counts, t_s, f_hz)
+        return {"r": round(r, 5), "null_mean": round(mu, 5), "null_sd": round(sd, 5),
+                "null_n": n, "z": round((r - mu) / sd, 2) if sd else None,
+                "spikes": float(counts.sum())}
+
     results = []
     for f in frequencies:
         mod, mod_groups = trial(f, depth)
         # Unmodulated control at the same baseline and the same duration: its
         # vector strength at f is the floor, set by spike count alone.
-        ctl, _ = trial(f, 0.0)
-        r_mod = vector_strength(mod, t_s, f)
-        r_ctl = vector_strength(ctl, t_s, f)
+        ctl, ctl_groups = trial(f, 0.0)
+        pooled = score(mod, f)
+        pooled_ctl = score(ctl, f)
         results.append({
             "modulation_hz": f,
             "wingbeats_per_cycle": round(WINGBEAT_HZ / f, 3),
-            "spikes_modulated": float(mod.sum()),
-            "spikes_control": float(ctl.sum()),
-            "vector_strength": round(r_mod, 5),
-            "vector_strength_control": round(r_ctl, 5),
-            "ratio_to_floor": round(r_mod / r_ctl, 2) if r_ctl else None,
-            "per_group_vector_strength": {
-                k: round(vector_strength(v, t_s, f), 5) for k, v in mod_groups.items()},
+            "pooled": pooled,
+            "pooled_unmodulated_control": pooled_ctl,
+            # Per group, each with its own chance level and spike count -- the
+            # fix for the first run, where a 1-cell readout's r was reported
+            # without the floor that makes it interpretable.
+            "per_group": {k: score(v, f) for k, v in mod_groups.items()},
+            "per_group_control": {k: score(v, f) for k, v in ctl_groups.items()},
         })
-        r = results[-1]
-        print(f"{f:6.0f} Hz  r={r_mod:.4f}  floor={r_ctl:.4f}  "
-              f"ratio={str(r['ratio_to_floor']):>6s}  spikes={mod.sum():.0f}", flush=True)
+        print(f"{f:6.0f} Hz  pooled r={pooled['r']:.4f} z={str(pooled['z']):>6s}  "
+              f"(control z={str(pooled_ctl['z']):>6s})  spikes={mod.sum():.0f}", flush=True)
 
     report = {
         "dataset": dataset, "baseline_mV": baseline, "depth_mV": depth,
         "bin_ms": bin_ms, "duration_ms": duration_ms,
         "wingbeat_hz": WINGBEAT_HZ,
-        "metric": "vector strength of binned wing-motor spikes at the modulation frequency",
+        "metric": "vector strength of binned wing-motor spikes at the modulation "
+                  "frequency, scored as z against the same train's vector strength "
+                  "at undriven frequencies",
+        "null_frequencies_hz": list(NULL_HZ),
         "frequencies": results,
         "wall_seconds": round(time.time() - started, 1),
     }

@@ -11,7 +11,109 @@ by the setup rather than the thing being measured.
 
 ---
 
-## 2026-09-19 — Modulation transfer function (`haltere_mtf.py`) — RUNNING
+## 2026-09-19 — Johnston's organ, first pass (`jo_tracing_check.py`, `jo_potency.py`)
+
+**A claim checked and rejected before building on it.** A suggestion arrived that
+linear acceleration, gravity and wind should be read from the JO-A array
+(JO-A1–A4). MaleCNS's own `subclass` labels say the opposite: JO-A is
+**auditory 49 cells to 1**, while the wind/gravity population is JO-E (EV 176,
+ED 91) and JO-C (CL 19, CM 23). That matches Kamikouchi et al. 2009 and Yorozu
+et al. 2009 — JO-A/B are the phasic sound-and-vibration subgroups, JO-C/E the
+tonic ones responding to sustained deflection. JO-A1–A4 is also only 26 cells.
+Driving JO-A for gravity would have driven the auditory pathway.
+
+**Tracing check first, because all 672 JO cells are `RT Hard to trace`** — the
+dataset's lowest tier, with no Reviewed subset to stratify against. Structural
+proxies instead, against the haltere afferents as a positive reference:
+
+| population | n | median out-degree | zero-output |
+| --- | --- | --- | --- |
+| JO wind_gravity | 475 | 86.0 | 57 (12%) |
+| JO auditory | 114 | 38.5 | 29 (25%) |
+| haltere afferents | 205 | 114.0 | 1 (0.5%) |
+| whole graph | 166,700 | 112.0 | 1,220 (0.7%) |
+
+Type labels are structurally real — within-type target overlap 0.097 against
+0.024 between types, a ratio of **3.99**, matching the haltere reference's 3.80.
+But ~13% of wind_gravity cells are dead ends and arbors are truncated, so
+**every potency result is a lower bound**: silence cannot be distinguished from
+an unreconstructed axon. And bilateral pairing is unavailable — median L/R
+imbalance 0.472, with 16 of 34 types worse than 2:1 — so the haltere design's
+reliance on types being near-perfect bilateral pairs does not port.
+
+Potency sweep running with those three corrections: coarse arrays not fine
+types, L/R on the pooled population, and all motor pools rather than wings only
+(gravity and wind drive posture; a wing-only readout would score a postural
+response as silence).
+
+---
+
+## 2026-09-19 — In-phase vs antiphase drive (`haltere_phase_pairs.py`)
+
+**The pathway sums bilateral haltere input rather than comparing it.**
+
+Two groups driven sinusoidally with a relative phase offset; total injected
+current identical across phases, so any difference is a phase effect. 10 Hz is a
+positive control (the MTF says the pathway follows there); 218 Hz is the
+question.
+
+| pair | 0° in-phase | 90° quadrature | 180° antiphase |
+| --- | --- | --- | --- |
+| all halteres L\|R @ 10 Hz | **z = 4.61** | z = 3.61 | **z = −0.56** |
+| SNpp12\|SNpp23 @ 10 Hz | **z = 4.25** | z = 1.44 | **z = −0.52** |
+| every pair @ 218 Hz | −0.76 … −0.05 | −1.16 … −0.37 | −0.74 … +0.15 |
+
+Monotonic in phase offset, in two independent pairs: in-phase locks strongly,
+quadrature partially, **antiphase not at all**. That is a cancellation
+signature. The convergence point computes something like L+R, so a pitch-like
+in-phase signal survives and a roll/yaw-like antiphase signal cancels to a DC
+level carrying no modulation.
+
+This is the mechanism behind the DC sweep's null. Antisymmetric drive did not
+fail to produce a *lateralised* response; it fails to produce a *modulated* one
+at all, because the two sides cancel where they converge. Symmetric power was
+1.000 in all 24 trials regardless of drive phase.
+
+At 218 Hz nothing, anywhere, as predicted from the 8 Hz corner. The prediction
+was recorded before the run.
+
+**Single small clusters show nothing at any phase** (SNpp12_L\|R, SNpp23_L\|R:
+z from −0.4 to 1.02). The effect needs the full ~102-cell-per-side population;
+one or three cells cannot modulate the pool detectably. So this is a population
+result and does not license claims about individual clusters.
+
+---
+
+## 2026-09-19 — Modulation transfer function, corrected (`haltere_mtf.py`)
+
+**Corner between 10 and 30 Hz; nothing above it in any readout.**
+
+The first run reported per-group vector strength without per-group floors, and
+I flagged the b1/b2 numbers (r of 0.25–0.63 even at 218 Hz) as uninterpretable.
+They were. Each group now gets a chance level computed *within* the trial, from
+the same spike train at frequencies it was not driven at, which scales with
+spike count by construction.
+
+| Hz | pooled r | pooled z | control z | power_L z | power_R z | b1/b2/hg1 z |
+| --- | --- | --- | --- | --- | --- | --- |
+| 5 | 0.156 | **5.3** | −0.0 | **5.6** | **5.4** | −2.5 … 1.9 |
+| 10 | 0.144 | **4.6** | −0.6 | **4.7** | **4.0** | −0.3 … 2.3 |
+| 30 | 0.026 | −0.2 | −1.4 | −0.1 | −0.9 | −1.8 … 1.3 |
+| 60–400 | 0.015–0.051 | −1.2 … 0.8 | −1.3 … −0.4 | −0.7 … 0.4 | −1.3 … 1.5 |
+
+The apparent fast following in the steering muscles was small-N artifact:
+**b1_L, b1_R, b2_L and b2_R fire 5 spikes each** in a 1000 ms trial, and chance
+vector strength at 5 spikes is ~1/sqrt(5) = 0.45 — exactly the range reported.
+With proper floors, only the power muscles (886 and 907 spikes) lock, only at
+5–10 Hz. The speculation that b1 might follow faster, and the Fayyazuddin &
+Dickinson connection I hung on it, is **refuted**.
+
+Corner matches 1/(2*pi*tau) = 8.0 Hz for tau = 20 ms, so the membrane constant
+is the binding constraint, not the balanced convergence. Following a 218 Hz
+wingbeat would need tau ~= 0.73 ms — shorter than the 1–5 ms of fast
+interneurons, and worth putting beside Fox et al.'s measured 0.81 ms spike-timing
+jitter in haltere afferents: the biology works at that timescale through precise
+spike timing, not through an implausibly leaky membrane.
 
 **Question.** Does a sinusoidal modulation of haltere drive reach the wing motor
 pool, and up to what frequency? A wingbeat is 4.59 ms / 218 Hz.
