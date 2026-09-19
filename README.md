@@ -138,6 +138,11 @@ own docstring warns, and the fix is the follow-up already named there: fetch the
 measured base wing pattern from figshare. No amount of wing *geometry* helps; all
 three rows above are zero within noise.
 
+The −0.023 is measured on a body free to drift and rotate in zero gravity, so
+the wings see a slowly changing relative flow rather than still air. That is the
+honest framing of the number, and it does not change the verdict: a stroke that
+produced real lift would show a positive mean long before drift mattered.
+
 Two things this turned up, both of which would have produced a wrong answer:
 
 **FlyGym's fluid medium is in the wrong units, and `fly/body.py` corrects it.**
@@ -160,6 +165,25 @@ so the pattern played at double speed. The commanded trajectory looks correct
 either way; what gives it away is the achieved wing amplitude, which collapses
 from 2.8 rad to 1.2 rad because the position servos cannot track it. Both
 `play.py` and `render.py` now step it every other physics step.
+
+### What free flight did fix
+
+The haltere pathway carries a signal for the first time. It is driven by thorax
+angular velocity, and tethered the thorax is welded, so the drive was identically
+zero no matter what `--haltere-gain` said. Three runs of 10 ticks, one condition
+changed at a time and a fresh brain in each:
+
+| world | source | `--haltere-gain` | spikes | steering asymmetry |
+| --- | --- | --- | --- | --- |
+| flat | motor | 0 | 210,436 | 0.000 |
+| tethered | motor | 5 | 215,036 | 0.000 |
+| flat | motor | 5 | 509,391 | 0.197 |
+
+Only the third does anything, which is what it should look like: the motor pool
+is unreachable without haltere current, and haltere current is zero without a
+body that can rotate. This is still engineered injection from a gyro reading, not
+a beating haltere — see "Are the halteres wired up?" — but the loop now closes
+through the body instead of through nothing.
 
 ## Looking at it
 
