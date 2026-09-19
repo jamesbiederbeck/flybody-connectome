@@ -66,6 +66,36 @@ inhibition is recruited), so "more current" is not "more flight"; and an earlier
 sweep that reused one brain across amplitudes was confounded by carried-over
 state. Measure with a fresh brain per condition.
 
+## Are the halteres wired up?
+
+**No.** The model has halteres; the connectome has haltere afferents; nothing
+joins them.
+
+| link | state |
+| --- | --- |
+| haltere bodies, joints, geoms in the model | present (`{l,r}_haltere`, `c_thorax-*-haltere-pitch`) |
+| haltere actuators | present, but never commanded -- only the wing actuators are written |
+| haltere motion during flight | **3e-06 rad** over 44 wingbeats; they do not counter-oscillate |
+| sensors anywhere in the model | **none at all** (`nsensor == 0`) |
+| what drives the 205 connectome haltere afferents | a scalar derived from thorax angular velocity, host-side |
+
+So nothing measures a Coriolis force, because nothing is moving and there is no
+sensor to measure it with. What `circuit.proprioceptive_stimulation` injects is a
+current proportional to how fast the body is rotating -- an engineered stand-in
+for what a haltere would report, not a haltere.
+
+Tethered, the thorax is welded, so that signal is identically zero and the
+pathway is inert. `--haltere-gain` therefore does nothing in the current setup.
+It becomes real either in free flight, or as soon as the drive is fed from an
+external 3-vector -- which is the point of taking one: a phone IMU and an
+airframe supply the same shape.
+
+Wiring them properly means, in order: drive the haltere actuators antiphase to
+the wings so they actually beat; add sensors to the model (there are none, so
+this is from scratch); and derive afferent drive from haltere deflection rather
+than from body rotation. Until then, treat every haltere result as an injected
+stimulus, not a measurement.
+
 ## Is vision reaching the wings?
 
 Because the wingbeat pattern generator keeps the wings beating regardless, "it

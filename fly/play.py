@@ -204,15 +204,30 @@ def _build_receptor_map(brain, fly, graph_path) -> _ReceptorMap:
 
 
 def _thorax_gyro(fly) -> np.ndarray:
-    """Body angular velocity.
+    """Angular velocity of the thorax, in its own frame, rad/s.
 
-    Tethered, the thorax is held fixed, so this reads ~0 and the haltere drive
-    is inert -- which is correct and worth knowing.  It becomes a real signal in
-    free flight, and the same 3-vector is what a phone IMU or an airframe would
-    supply.
+    Uses `mj_objectVelocity` rather than slicing `qvel`, because `TetheredWorld`
+    has **no freejoint** -- `qvel[3:6]` there is not the body's angular velocity
+    at all, it is three mouthpart joints.  This function works with or without a
+    root freejoint, so it stays correct when the fly is untethered.
+
+    Tethered, the thorax is welded and this reads ~0, so the haltere drive is
+    inert.  That is correct and worth knowing: the haltere pathway only carries a
+    signal once the body can actually rotate.
+
+    Note this is *body* angular velocity, not haltere state.  The model's
+    halteres do not beat and carry no sensors, so nothing here measures a real
+    Coriolis force -- see README, "Are the halteres wired up?".
     """
-    qvel = fly.data.qvel
-    return np.asarray(qvel[3:6] if len(qvel) >= 6 else np.zeros(3), dtype=float)
+    import mujoco as mj
+
+    body_id = mj.mj_name2id(fly.model, mj.mjtObj.mjOBJ_BODY, f"{fly.name}/c_thorax")
+    if body_id < 0:
+        return np.zeros(3)
+    vel = np.zeros(6)
+    # flg_local=1 -> the body's own frame; rotational part comes first.
+    mj.mj_objectVelocity(fly.model, fly.data, mj.mjtObj.mjOBJ_BODY, body_id, vel, 1)
+    return np.asarray(vel[:3], dtype=float)
 
 
 def main() -> None:
