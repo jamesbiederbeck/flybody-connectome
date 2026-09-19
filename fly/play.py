@@ -35,6 +35,7 @@ def run(ticks: int = 300,
         haltere_gain: float = 0.0,
         frozen_vision: bool = False,
         source: str = "descending",
+        make_renderer=None,
         seed: int = 0) -> dict:
     """Run the tethered loop and return a JSON-able report.
 
@@ -52,6 +53,11 @@ def run(ticks: int = 300,
         source: "descending" decodes DNp20/DNpe017, the only cells visual input
             reaches in this connectome. "motor" decodes the wing motor neurons,
             which stay silent unless `haltere_gain` is injecting current.
+        make_renderer: Optional `callable(mj_model) -> renderer`, called once the
+            model is compiled.  Anything with a `render_as_needed(mj_data)` will
+            do; `fly.render` passes FlyGym's `Renderer`.  Kept as a factory
+            rather than a path so this module never has to know about video
+            encoding, camera choice or playback rate.
         seed: Unused by the physics (tethered and deterministic); recorded so
             reports are comparable.
     """
@@ -95,6 +101,8 @@ def run(ticks: int = 300,
     # from 2.8 rad to 1.2 rad while the command looks unchanged.
     wpg_every = max(1, int(round(_FLY_CONTROL_TIMESTEP / physics_dt)))
 
+    renderer = make_renderer(fly.model) if make_renderer is not None else None
+
     frozen = None
     history = {"wingbeat_hz": [], "offsets": [], "spikes": []}
     started = time.time()
@@ -123,6 +131,10 @@ def run(ticks: int = 300,
                 stroke = wpg.step(ctrl_freq=action["wingbeat_hz"])
             fly.data.ctrl[fly.wing_actuator_ids] = stroke + action["wing_offsets"]
             fly.sim.step()
+            if renderer is not None:
+                # Rate-limited internally; it decides from `data.time` whether
+                # this step is due a frame.
+                renderer.render_as_needed(fly.data)
 
     offsets = np.asarray(history["offsets"])
     wall = time.time() - started

@@ -196,10 +196,24 @@ MUJOCO_GL=egl python -m fly.render --world flat --ms 200 --out outputs/render/fl
 MUJOCO_GL=egl python -m fly.render --world tethered --eyes --ms 50
 ```
 
-Playback is slowed ~200x by default: a wingbeat is 4.6 ms, so at 25 fps that puts
-about two frames in each beat. It runs open loop (pattern generator only, no
-connectome), because the questions worth rendering are physics questions the
-brain contributes nothing to.
+Open loop by default — pattern generator only, no connectome — because the
+questions worth rendering are physics questions the brain contributes nothing to.
+`--brain` runs `fly.play`'s closed loop instead, rendering from inside it rather
+than reimplementing it, so what is on screen is the code path the JSON reports
+come from. It reproduces the run exactly; the third row of the table above is
+
+```sh
+MUJOCO_GL=egl python -m fly.render --brain --ticks 10 --world flat \
+    --source motor --haltere-gain 5.0 --out outputs/render/trial3.mp4
+```
+
+which is 333 ms of simulation in an 8.4 s video: the fly falls out of frame
+bottom, lands on its side, and goes on beating.
+
+At 25 fps a frame is taken every `playback_speed / 25` seconds of simulation, so
+the open-loop default of 0.005 puts ~23 frames in each 4.6 ms wingbeat — right
+for inspecting a stroke, far too many for a whole fall. `--brain` defaults to
+0.04, about 3 frames per beat.
 
 ## Accepted approximations
 

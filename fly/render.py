@@ -9,11 +9,15 @@ the retina is pointed at anything.
 
 Open loop by default -- wingbeat pattern generator only, no connectome -- because
 the usual question here is a physics one ("does it fly", "do the wings beat")
-that the brain contributes nothing to.  `--brain` runs the full loop instead, at
-the cost of loading a 25.6M-edge graph.
+that the brain contributes nothing to.  `--brain` runs `fly.play`'s full loop
+instead, rendering from inside it rather than reimplementing it, at the cost of
+loading a 25.6M-edge graph and running ~25x slower than real time.
 
-Playback is heavily slowed: a wingbeat is 4.6 ms, so `playback_speed=0.005` at
-25 fps puts roughly two frames in each beat.
+Playback is heavily slowed.  At 25 fps a frame is taken every
+`playback_speed / 25` seconds of simulation, so the default 0.005 puts about 23
+frames in each 4.6 ms wingbeat -- fine for inspecting a stroke, far too many for
+a whole fall.  `--playback-speed 0.04` gives ~3 frames per beat, which is what a
+few hundred milliseconds of flight wants.
 """
 
 from __future__ import annotations
@@ -122,6 +126,54 @@ def render(*,
     return report
 
 
+def render_brain(*,
+                 ticks: int = 10,
+                 world: str = "flat",
+                 source: str = "motor",
+                 haltere_gain: float = 5.0,
+                 brain_hz: float = 30.0,
+                 frozen_vision: bool = False,
+                 eyes: bool = False,
+                 playback_speed: float = 0.04,
+                 camera_res: tuple[int, int] = (480, 640),
+                 out: Path | str = ROOT / "outputs/render/brain.mp4") -> dict:
+    """Render `fly.play`'s closed loop: eyes and halteres -> connectome -> wings.
+
+    The renderer is handed to `play.run` as a factory rather than the loop being
+    duplicated here, so what ends up on screen is the same code path the JSON
+    reports come from.  Defaults are the one condition that currently does
+    anything -- free flight, motor readout, haltere current -- see README,
+    "What free flight did fix".
+    """
+    from flygym.rendering import Renderer
+
+    from fly.body import SCENE_CAMERA
+    from fly import play
+
+    cameras = [SCENE_CAMERA]
+    if eyes:
+        cameras += [f"flybody/{s}_eye_cam_camera" for s in ("l", "r")]
+
+    out = Path(out)
+    holder = {}
+
+    def make_renderer(model):
+        holder["r"] = Renderer(model, cameras, camera_res=camera_res,
+                               playback_speed=playback_speed)
+        return holder["r"]
+
+    report = play.run(ticks=ticks, world=world, source=source,
+                      haltere_gain=haltere_gain, brain_hz=brain_hz,
+                      frozen_vision=frozen_vision, make_renderer=make_renderer)
+    renderer = holder["r"]
+    try:
+        renderer.save_video(out if len(cameras) == 1 else out.parent)
+    finally:
+        renderer.close()
+    report["video"] = str(out if len(cameras) == 1 else out.parent)
+    return report
+
+
 def _thorax_id(model, name: str) -> int:
     import mujoco as mj
 
@@ -142,9 +194,28 @@ def main() -> None:
                    help="control condition: hold the wings still")
     p.add_argument("--eyes", action="store_true",
                    help="also render both compound-eye cameras")
-    p.add_argument("--playback-speed", type=float, default=0.005)
-    p.add_argument("--out", default=str(ROOT / "outputs/render/flight.mp4"))
+    p.add_argument("--playback-speed", type=float, default=None,
+                   help="default 0.005 open loop (a stroke), 0.04 with --brain "
+                        "(a few hundred ms of flight)")
+    p.add_argument("--brain", action="store_true",
+                   help="run fly.play's closed loop instead of open loop")
+    p.add_argument("--ticks", type=int, default=10, help="--brain only")
+    p.add_argument("--source", choices=("descending", "motor"), default="motor",
+                   help="--brain only")
+    p.add_argument("--haltere-gain", type=float, default=5.0, help="--brain only")
+    p.add_argument("--frozen-vision", action="store_true", help="--brain only")
+    p.add_argument("--out", default=None)
     a = p.parse_args()
+    if a.brain:
+        out = a.out or str(ROOT / "outputs/render/brain.mp4")
+        speed = 0.04 if a.playback_speed is None else a.playback_speed
+        print(json.dumps(render_brain(ticks=a.ticks, world=a.world, source=a.source,
+                                      haltere_gain=a.haltere_gain,
+                                      frozen_vision=a.frozen_vision, eyes=a.eyes,
+                                      playback_speed=speed, out=out), indent=2))
+        return
+    a.out = a.out or str(ROOT / "outputs/render/flight.mp4")
+    a.playback_speed = 0.005 if a.playback_speed is None else a.playback_speed
     print(json.dumps(render(world=a.world, medium=a.medium, ms=a.ms,
                             wingbeat_hz=a.wingbeat_hz, flap=not a.no_flap, hover=a.hover,
                             eyes=a.eyes, playback_speed=a.playback_speed,
