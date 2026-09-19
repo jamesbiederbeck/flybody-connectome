@@ -11,6 +11,68 @@ by the setup rather than the thing being measured.
 
 ---
 
+## 2026-09-19 — Is the first synapse a bottleneck or a feature? (`haltere_tau_test.py`)
+
+**A simulation bottleneck, and the fix has an optimum rather than a direction.**
+
+| tau_m | corner | afferents z | hop-1 z | motor z | afferent rate |
+| --- | --- | --- | --- | --- | --- |
+| 20 ms (reference) | 8 Hz | 5.11 | **-0.28** | -1.12 | 43 Hz/cell |
+| 5 ms | 31.8 Hz | 2.39 | 0.22 | -0.46 | 138 Hz/cell |
+| **2 ms** | 79.6 Hz | **11.83** | **5.25** | **3.08** | **219 Hz/cell** |
+| 0.73 ms | 218 Hz | 1.31 | 0.31 | 0.58 | 344 Hz/cell |
+
+At tau_m = 2 ms the 218 Hz carrier crosses the first synapse and reaches the wing
+motor pool. The wiring does not discard it; the membrane constant does. The
+structural argument agreed in advance: convergence onto hop-1 cells is modest
+(median 4 afferents each), every synapse carries the same fixed 1.8 ms delay,
+and hop 1 is 100% excitatory, so afferents driven in phase spike synchronously
+and their inputs arrive synchronously — summation preserves phase and nothing
+structural is available to destroy it.
+
+**Locking peaks where firing rate matches the carrier.** At tau = 2 ms the
+afferents fire 219 Hz against a 218 Hz drive: one spike per cycle, the ideal
+condition. At 0.73 ms they fire 344 Hz — more than one spike per cycle, so
+spikes land at several phases and locking dilutes, with the 2.2 ms refractory
+ceiling at 455 Hz. At 20 ms they fire 43 Hz, one spike per five cycles. So
+"faster tau" is not the intervention; there is an optimum, and it moves with
+drive level, since saturation depends on how hard the cells are driven. A
+fast-tau subnetwork should be tuned so its relay cells fire near wingbeat
+frequency, not as fast as possible.
+
+**This run is the second attempt; the first was void.** See the bug below.
+
+---
+
+## 2026-09-19 — A bug I introduced, and what it invalidated
+
+`Brain.step` gained a `stimulation` argument in the morning's tau commit, and it
+injected the current without adding those cells to the active set. The engine
+only integrates active cells, and that set is seeded with retina/lamina/sugar
+alone — so injected current into any sensory afferent was silently ignored until
+some synapse happened to recruit the cell. `kernel.cpp:26` awakens any cell
+whose drive changed; the numba path did not.
+
+Measured on 205 haltere afferents at 12 mV for 100 ms: **native fired 829 of
+them, numba fired 1.** After the fix both fire 829 (totals 37,466 against
+37,469 — close, not identical).
+
+**Invalidated:** the first tau sweep, which ran on the numba backend. Its two
+anomalies were both symptoms — zero spikes at tau = 0.73 ms, and a
+non-monotonic dip at tau = 5 ms — which is why they were worth chasing instead
+of explaining away. **Unaffected:** every other experiment in this log, all of
+which used `NativeBrain`.
+
+**Nothing to upstream.** `stimulation` did not exist on the numba `Brain.step`
+before that commit, so doomfly cannot have the bug; every path there that
+injects current goes through the correct C++ kernel.
+
+**Worth keeping:** the two backends now agree to 3 spikes in 37,466 on an
+identical stimulated run. That comparison would have caught this immediately had
+it been run when the parameter was added.
+
+---
+
 ## 2026-09-19 — 218 Hz by depth (`haltere_depth_phase.py`)
 
 **The bottleneck is the first synapse, not the afferents.** Every cluster
