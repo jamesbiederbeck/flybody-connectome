@@ -1,0 +1,16 @@
+# Python 3.12. This set runs the connectome engine, FlyGym and MuJoCo in one
+# process; verified against androsophila's suite (100 passed, 2 skipped, matching
+# its numpy-1.24 baseline exactly, GPU backend included).
+#
+# Two gotchas:
+#   * cupy 14 no longer bundles CUDA headers -- the [ctk] extra is required or
+#     every GPU test fails with "Failed to find CUDA headers". GPU is optional.
+#   * flygym/vision/__init__.py is empty: import from flygym.vision.retina.
+flygym==2.1.0
+mujoco>=3.9,<3.10
+numpy>=2.0,<3.0
+numba>=0.67
+scipy>=1.18,<2.0
+pandas>=3.0
+pyarrow>=25.0
+pytest>=8.0
