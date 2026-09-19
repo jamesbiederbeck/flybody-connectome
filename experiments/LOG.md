@@ -100,7 +100,39 @@ an unreconstructed axon. And bilateral pairing is unavailable — median L/R
 imbalance 0.472, with 16 of 34 types worse than 2:1 — so the haltere design's
 reliance on types being near-perfect bilateral pairs does not port.
 
-**Potency result, and why it is not yet a finding.** Nearly every JO group
+**The control came back and the wind/gravity result does not survive it.**
+Size-matched random draws from other sensory populations (`jo_specificity_control.py`),
+at 8 mV, 3 draws each:
+
+| random n | draws | JO group at that size | JO 8 mV | verdict |
+| --- | --- | --- | --- | --- |
+| 19 | 0, 0, 0 | JO-FD (8) | 2055 | **specific** |
+| 19 | 0, 0, 0 | JO-mz (11) | 2865 | **specific** |
+| 19 | 0, 0, 0 | JO-CM (30) | 2404 | **specific** |
+| 50 | 184, 0, 0 | JO-A (50) | 2121 | **specific** |
+| 50 | 184, 0, 0 | JO-FV (70) | 3116 | **specific** |
+| 91 | 916, 3903, 0 | JO-ED (91) | 2192 | within random |
+| 176 | 2787, 3437, 3537 | JO-EV (176) | 3173 | **within random** |
+| 475 | 3507, 3857, 4772 | pooled_wind_gravity (475) | 3498 | **within random** |
+
+JO-EV and pooled_wind_gravity -- the populations this whole line of work was
+pointed at -- produce exactly what a random draw of the same size produces. At
+n >= 176 the assay is saturated: injecting current into any 176 sensory cells
+fills the motor pools, so there is no dynamic range left to distinguish JO from
+anything. The earlier claim that "JO reaches the flight motor system harder than
+the halteres do" was measuring saturation, not JO, and is withdrawn.
+
+What *is* specific is small: JO-FD produces 2,055 spikes from **8 cells** where
+random 19-cell draws give zero; JO-mz 2,865 from 11; JO-CM 2,404 from 30. And
+JO-A -- the *auditory* array -- is specifically potent at 50 cells against a
+random mean of 61.
+
+Same shape as the halteres: potency concentrated in a few small groups, large
+populations indistinguishable from generic ignition. The fix is to leave
+saturation -- rerun the large arrays at 4-6 mV or shorter duration, where random
+draws are silent and the assay has range.
+
+**Original potency result, superseded by the control above.** Nearly every JO group
 drives thousands of motor spikes at 8 mV (unstimulated baseline is 0 in every
 pool). Output lands on abdomen (~1,750 spikes across 214 cells) and wing
 (~1,400 across 67) — per cell the wing pool is the strongest target, stronger
