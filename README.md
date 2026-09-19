@@ -207,6 +207,8 @@ MUJOCO_GL=egl python -m fly.render --brain --ticks 10 --world flat \
     --source motor --haltere-gain 5.0 --out outputs/render/trial3.mp4
 ```
 
+![free-flight run: the fly falls and keeps beating](media/trial3.gif)
+
 which is 333 ms of simulation in an 8.4 s video — [`media/trial3.mp4`](media/trial3.mp4),
 checked in, 1.1 MB. The fly drops the height of the frame, lands on its side, and
 goes on beating. Free, the `scene_cam` is parented
