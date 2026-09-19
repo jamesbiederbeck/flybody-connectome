@@ -166,6 +166,47 @@ either way; what gives it away is the achieved wing amplitude, which collapses
 from 2.8 rad to 1.2 rad because the position servos cannot track it. Both
 `play.py` and `render.py` now step it every other physics step.
 
+### How these were measured
+
+Open loop throughout — wingbeat pattern generator only, no connectome. Lift is a
+physics question, and the brain contributes nothing to it but a slowly-varying
+6-vector offset and a frequency, so loading a 25.6M-edge graph would only add
+confounds. A fresh `build()` per condition: MuJoCo state carries across a run,
+and reusing one model between conditions has produced a wrong answer in this
+family before (see `AGENTS.md` on the haltere sweep).
+
+Four checks, in this order, because the first two gate whether the third means
+anything:
+
+1. **Is the command being clipped?** Commanded stroke min/max against
+   `model.actuator_ctrlrange` for the six wing actuators. Peaks sit inside the
+   ranges (yaw ±1.5, roll −1.0/1.5, pitch −1.27/2.92), so MuJoCo is not silently
+   clamping.
+2. **Is the servo tracking?** Commanded stroke against *achieved* wing joint
+   `qpos` amplitude. This is the check that caught the 436 Hz bug, and nothing
+   else would have: the command looks identical at either rate. At the correct
+   rate achieved amplitude slightly exceeds commanded (2.8 rad against 2.1),
+   which is the position servo overshooting a fast target, not a failure.
+3. **Is there net lift?** Thorax `xpos[2]` logged at physics rate against
+   `z₀ − ½·9810·t²`. Sitting on the parabola means aerodynamics contributes
+   nothing; falling slower means it works and is merely too weak. That one
+   comparison splits the failure space in half — and it is also what exposed the
+   unit bug, because the *no-flap* control fell far too slowly to be air.
+4. **A/B the wing geometry.** `wing_fluid` on/off and `ellipsoid_fluid` on/off,
+   same everything else.
+
+The lift number itself comes from `--hover`, which zeroes gravity and averages
+`data.qfrc_passive[2]` — where MuJoCo accumulates fluid forces — over whole
+wingbeats only. Both details matter. Gravity off because a falling body sees an
+upward drag indistinguishable from lift in that same array, tending to exactly
+1.0 at terminal velocity no matter what the wings do; whole beats only because
+peak in-beat force is ~4x body weight either way, so a partial beat biases the
+mean by more than the mean itself.
+
+The trajectory-based reading is kept as a cross-check rather than discarded, and
+the two disagree in an informative way: during the fall the same array reads
++0.24 body weights, which is that drag, not lift.
+
 ### What free flight did fix
 
 The haltere pathway carries a signal for the first time. It is driven by thorax
