@@ -11,6 +11,55 @@ by the setup rather than the thing being measured.
 
 ---
 
+## 2026-09-19 — Upstream flybody does not fly either, and that was the premise
+
+Ran upstream flybody directly: its own XML, its own centimetre units, its own
+`Flying` configuration (gain 18, stiffness 0.01, damping 0.00777, ellipsoid
+fluid with `fluidcoef` including the 1.7 Kutta term), driven by its own WPG with
+the measured pattern. dm_control 1.0.41 is incompatible with mujoco 3.9
+(`flex_bandwidth`), so the model was loaded through `MjSpec` and configured by
+hand instead.
+
+**Force-array measure:** lift/weight = **+0.0069**, against our best of +0.0062.
+Indistinguishable.
+
+**Model-independent measure**, gravity on, 300 ms free fall:
+
+| upstream, 300 ms | fall | % of free-fall |
+| --- | --- | --- |
+| **wings still** | 22.40 cm | **50.7%** |
+| **flapping + ellipsoid fluid** | 22.87 cm | **51.8%** |
+| flapping, no ellipsoid fluid | 27.93 cm | 63.3% |
+
+**Flapping is marginally worse than holding the wings still.** The ~50%
+reduction from free-fall is body drag; the wings contribute nothing upward. With
+gravity zeroed the net vertical acceleration is -0.026 g — no lift at all, and
+the apparent "support" under gravity is velocity-dependent drag.
+
+**The project's premise was wrong.** The plan states that "the WPG keeps the fly
+airborne on its own, so a fly whose connectome output is entirely disconnected
+will still fly", and builds the vision control on top of that. It does not. The
+WPG supplies a base oscillation; **lift comes from the learned policy's wing
+offsets**, which is why flybody ships `trained-fly-policies.zip`. Flight in this
+model is a control problem, not a property of the pattern.
+
+**Consequences.**
+
+* "The fly does not fly" was never a port bug. Every parameter search here was
+  chasing a fault that is not in our code.
+* Our port does still have two real defects worth fixing for fidelity: the
+  ellipsoid fluid model is never enabled (so the wings have no Kutta lift term
+  at all), and the cm->mm conversion of wing gain and damping was not applied
+  where the stiffness conversion was.
+* A connectome-driven fly cannot be expected to fly by decoding steering offsets
+  onto a pattern that does not itself fly. Either a trained controller supplies
+  weight support and the connectome perturbs it, or flight has to be learned —
+  and the latter is a much larger project than this repo assumes.
+* The README's flight claims and the plan's verification step 6 both need
+  correcting. They are written on the assumption that flapping keeps the fly up.
+
+---
+
 ## 2026-09-19 — Flight: four causes ruled out, still no lift
 
 Continuing from the wing-pattern result below. Each row uses the measured
