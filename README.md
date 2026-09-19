@@ -207,8 +207,11 @@ MUJOCO_GL=egl python -m fly.render --brain --ticks 10 --world flat \
     --source motor --haltere-gain 5.0 --out outputs/render/trial3.mp4
 ```
 
-which is 333 ms of simulation in an 8.4 s video: the fly falls out of frame
-bottom, lands on its side, and goes on beating.
+which is 333 ms of simulation in an 8.4 s video: the fly drops the height of the
+frame, lands on its side, and goes on beating. Free, the `scene_cam` is parented
+to the thorax in `trackcom`, so it follows the centre of mass while keeping a
+fixed world orientation — a tumbling fly tumbles on screen instead of appearing
+still while the world spins around it.
 
 At 25 fps a frame is taken every `playback_speed / 25` seconds of simulation, so
 the open-loop default of 0.005 puts ~23 frames in each 4.6 ms wingbeat — right

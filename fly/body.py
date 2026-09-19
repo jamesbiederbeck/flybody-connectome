@@ -211,8 +211,8 @@ def _add_scene_camera(scene, name: str, tethered: bool) -> None:
     """Add a camera looking at the fly from the side.
 
     Tethered, the fly does not move, so a world-fixed camera is enough.  Free,
-    it falls out of frame in about 100 ms, so the camera is parented to the
-    thorax and tracks it.
+    it drops the height of the frame in about 100 ms, so the camera is parented
+    to the thorax and tracks its subtree centre of mass.
     """
     if tethered:
         cam = scene.mjcf_root.worldbody.add_camera()
@@ -222,7 +222,11 @@ def _add_scene_camera(scene, name: str, tethered: bool) -> None:
         import mujoco as mj
 
         cam = scene.mjcf_root.body(f"{name}/c_thorax").add_camera()
-        cam.pos = (0.0, -14.0, 2.0)
+        # Level with the centre of mass, not above it.  In trackcom the camera
+        # keeps a fixed world orientation and only its position follows, so a
+        # vertical offset here does not tilt the view back towards the fly -- it
+        # just pushes the fly permanently down the frame by that much.
+        cam.pos = (0.0, -14.0, 0.0)
         cam.quat = (0.7071, 0.7071, 0.0, 0.0)
         # trackcom keeps the fly centred without inheriting its roll and pitch,
         # which would make a tumbling fly look stationary and the world spin.
