@@ -11,6 +11,51 @@ by the setup rather than the thing being measured.
 
 ---
 
+## 2026-09-19 — Single-cell sweep: the interface is seven cells (`haltere_single_cell.py`)
+
+**198 of 205 haltere afferents produce exactly zero motor spikes when driven
+alone at 20 mV.** Gini 0.976; the top five cells account for 93% of all
+single-cell response and the top ten for 100%.
+
+| body_id | type | side | out-deg | 8 mV | 14 mV | 20 mV |
+| --- | --- | --- | --- | --- | --- | --- |
+| 101048 | SApp | R | 293 | 0 | 0 | 1037 |
+| 136883 | SApp | L | 311 | 0 | 0 | 1018 |
+| **946174** | SNpp12 | R | 310 | **611** | 861 | 964 |
+| 808963 | SNpp23 | L | 112 | 0 | 0 | 934 |
+| 809889 | SNpp23 | R | 107 | 0 | 0 | 479 |
+| 801205 | SNpp12 | L | 328 | 3 | 13 | 240 |
+| 810009 | SNpp23 | L | 101 | 0 | 0 | 92 |
+
+Every cell of SNpp14, 15, 20, 21, 25, 34, 35 and SNxx25 is individually silent —
+45 cells, zero response between them. The 148-cell SApp bulk contributes through
+two cells (Gini 0.987 within the type).
+
+**Not a threshold artifact.** Two cells respond at 8 mV and seven at 20 mV:
+raising the current fivefold recruits five more cells, not hundreds. And 946174
+is uniquely low-threshold, firing 611 spikes at 8 mV where every other cell in
+the graph gives 0 or 3.
+
+**It closes the SNpp23 anomaly.** Its left cells total 1,026 spikes against 479
+on the right. That 2:1 asymmetry is why antiphase drive failed to cancel for
+SNpp23 in the depth-phase run while cancelling for every other pair — predicted
+there, confirmed here by an independent measurement.
+
+**What it costs.** The 45-pair antagonist sweep was mostly pairing objects that
+cannot respond at all: only pairs containing SNpp12 or SNpp23 could do anything,
+which is exactly the pattern observed. "Cluster" is the wrong unit, and the
+usable haltere interface for a joystick is about seven named cells, not 205 or
+ten clusters.
+
+**The caveat that is not yet tested.** Silent *alone* is not the same as
+contributing nothing *in combination*: sub-threshold inputs can sum at a shared
+target. The cluster results are consistent with the potent cell dominating
+(SNpp12 as a cluster gives 611 at 8 mV, exactly its R cell alone), but additive
+sub-threshold contribution has not been measured and would need a leave-one-out
+design to rule in or out.
+
+---
+
 ## 2026-09-19 — Is the first synapse a bottleneck or a feature? (`haltere_tau_test.py`)
 
 **A simulation bottleneck, and the fix has an optimum rather than a direction.**
