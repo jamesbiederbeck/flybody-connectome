@@ -220,6 +220,20 @@ changed at a time and a fresh brain in each:
 | tethered | motor | 5 | 215,036 | 0.000 |
 | flat | motor | 5 | 509,391 | 0.197 |
 
+```sh
+MUJOCO_GL=egl python -c "
+from fly.play import run
+for world, gain in (('flat', 0.0), ('tethered', 5.0), ('flat', 5.0)):
+    r = run(ticks=10, world=world, source='motor', haltere_gain=gain)
+    print(world, gain, r['total_spikes'], round(r['steering_asymmetry_mean'], 4))
+"
+```
+
+Each `run` builds its own `NativeBrain`, which is what keeps these independent:
+the haltere response is non-monotonic in injected current, and reusing one brain
+across conditions carries state — that is how an earlier sweep concluded the
+halteres were dead at low current and threshold at high, both wrong.
+
 Only the third does anything, which is what it should look like: the motor pool
 is unreachable without haltere current, and haltere current is zero without a
 body that can rotate. This is still engineered injection from a gyro reading, not
