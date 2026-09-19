@@ -11,6 +11,34 @@ by the setup rather than the thing being measured.
 
 ---
 
+## 2026-09-19 — 218 Hz by depth (`haltere_depth_phase.py`) — RUNNING
+
+Reads out at four depths (stimulated afferents, hop-1 targets, hop-2 targets,
+wing motor) rather than only at the motor pool, so a 218 Hz null says *where*
+the modulation dies rather than only that it is absent. Depth 0 is a built-in
+positive control: modulation is present in the stimulated cells by construction.
+Every cluster also runs at 10 Hz, because a cluster-level null at 218 Hz is
+uninterpretable on its own — single clusters showed nothing even at 10 Hz where
+the pathway demonstrably follows.
+
+**A readout flaw found in the first row, recorded before the rest arrives.**
+
+    pooled_all 10 Hz in_phase   depth0: 14.69  depth1: 5.42  depth2: -0.31  motor: 4.61
+
+Depth 2 pools ~60,000 cells into one spike train. They sit at different path
+lengths, so their modulation arrives at different phases and cancels in the sum:
+the pooled trace reads as chance even if every constituent cell is modulated.
+**The depth-2 column is not interpretable** and the meaningful comparison is
+depth 0 → depth 1 → motor. Fixing it properly would mean per-cell vector
+strength averaged over cells, not vector strength of the pooled train.
+
+The rest is sound: depth 0 confirms the drive, the first synapse attenuates
+~3×, and the motor value reproduces the standalone phase experiment exactly
+(4.61 under identical conditions), which is a useful consistency check between
+two separately written scripts.
+
+---
+
 ## 2026-09-19 — Johnston's organ, first pass (`jo_tracing_check.py`, `jo_potency.py`)
 
 **A claim checked and rejected before building on it.** A suggestion arrived that
@@ -41,10 +69,38 @@ an unreconstructed axon. And bilateral pairing is unavailable — median L/R
 imbalance 0.472, with 16 of 34 types worse than 2:1 — so the haltere design's
 reliance on types being near-perfect bilateral pairs does not port.
 
-Potency sweep running with those three corrections: coarse arrays not fine
-types, L/R on the pooled population, and all motor pools rather than wings only
-(gravity and wind drive posture; a wing-only readout would score a postural
-response as silence).
+**Potency result, and why it is not yet a finding.** Nearly every JO group
+drives thousands of motor spikes at 8 mV (unstimulated baseline is 0 in every
+pool). Output lands on abdomen (~1,750 spikes across 214 cells) and wing
+(~1,400 across 67) — per cell the wing pool is the strongest target, stronger
+than the halteres reach it — while neck, the classic gravity/wind postural
+output, gets 5–87 spikes across 24 cells.
+
+| group | n | abdomen | wing | legs f/m/h | neck | 8→20 mV |
+| --- | --- | --- | --- | --- | --- | --- |
+| JO-EV | 176 | 1198 | 1651 | 314/387/330 | 87 | 3173→4132 |
+| JO-ED | 91 | 1472 | 1242 | 306/315/260 | 58 | 2192→3758 |
+| JO-B | 88 | 1174 | 1096 | 135/257/230 | 48 | 699→3047 *graded* |
+| JO-CL | 19 | 72 | 195 | 0/4/56 | 6 | 0→389 *graded* |
+| JO-A (auditory) | 50 | 1145 | 1082 | 36/135/145 | 20 | 2121→2636 *flat* |
+| pooled wind_gravity | 475 | 1755 | 1391 | 457/377/281 | 67 | 3498→4465 |
+
+Two problems with reading this as "JO drives the motor pools".
+
+**Most groups are flat in current** — JO-A goes 2121 → 2636 from 8 to 20 mV, and
+CM, FD, FV, mz likewise. That is not the haltere signature (sharp threshold,
+graded, only 2 of 10 clusters responding), and combined with haltere input
+reaching 97% of the brain in three hops it suggests that injecting current into
+any large population ignites the network generically. `jo_specificity_control.py`
+tests exactly that with size-matched random draws from other sensory
+populations; until it returns, this table says nothing specific about JO.
+JO-B, CA and CL would survive that control regardless, being genuinely graded.
+
+**An entire side of the auditory population is unreconstructed.**
+`pooled_auditory_R` (52 cells, 27 with zero outputs) gives **exactly 0 at every
+current** while `pooled_auditory_L` (62 cells, 2 zero-output) gives ~2,500.
+`JO-unclear` (102 cells, 57 zero-output) is 0 throughout. An L/R comparison here
+would read reconstruction damage as biology.
 
 ---
 
