@@ -329,6 +329,12 @@ transduction. Real afferents encode Coriolis forces on a beating haltere with
 stroke-locked spike timing; we inject a scalar current host-side before the
 audited kernel runs. Same caveat `flappy-haltere` makes about its own drive.
 
+## Guide
+
+`GUIDE.md` covers running and extending this: the two-clock structure, the
+measurement controls that make a result mean anything, and the unit, rate and
+state-readback traps that produced wrong answers here before they were caught.
+
 ## Setup
 
 Python 3.12. One environment runs the engine, FlyGym and MuJoCo together; see
