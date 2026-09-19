@@ -11,6 +11,59 @@ by the setup rather than the thing being measured.
 
 ---
 
+## 2026-09-19 — Flight: four causes ruled out, still no lift
+
+Continuing from the wing-pattern result below. Each row uses the measured
+figshare pattern; lift is the `--hover` protocol (gravity zeroed, whole beats).
+
+| configuration | tracking yaw/roll/pitch | lift / weight | peak |
+| --- | --- | --- | --- |
+| flygym as-is | 2.26 / 1.16 / 0.94 | -0.0174 | 4.05 |
+| best of a 12-point gain x damping sweep | 1.29 / 1.00 / 0.99 | **+0.0062** | — |
+| + ellipsoid fluid, upstream fluidcoef | 2.11 / 0.97 / 0.94 | -0.0006 | 9.71 |
+| upstream params **as written** (gain 18) | 0.11 / 0.06 / 0.11 | +0.0002 | 0.01 |
+| upstream params **converted cm->mm** (gain 1800) | 0.99 / 0.82 / 0.88 | -0.0052 | 0.38 |
+| converted + ellipsoid fluid | 0.98 / 0.83 / 0.87 | -0.0113 | 2.41 |
+| gain 3600 + ellipsoid (best tracking) | **1.03 / 1.02 / 1.07** | -0.0043 | 3.43 |
+
+**Ruled out: the wing pattern, servo tracking, actuator gain/stiffness/damping,
+and the ellipsoid fluid model.** Every one changes force *magnitude* — peak
+ranges from 0.38 to 9.71 body weights across the table — and none produces net
+lift. A fly needs 1.0; the best result anywhere is +0.006.
+
+**What upstream actually does** (`flybody/tasks/base.py:270-322`), which flygym's
+FlyBody never receives: wing gain 18, stiffness 0.01, damping 0.00777, and
+`geom.fluidshape = 'ellipsoid'` with `fluidcoef = [1.0, 0.5, 1.5, 1.7, 1.0]` on
+every `*fluid*` geom. `fluidcoef[3] = 1.7` is the Kutta lift coefficient, so
+without that assignment the wings have drag and no lift term at all. FlyGym ships
+the FlyBody rigged but not configured for flight.
+
+**Another cm/mm trap.** Upstream is in centimetres and torque scales x100, so
+gain 18 means 1800 in flygym's millimetre model and damping 0.00777 means 0.777.
+Applied as written they collapse tracking to 0.10. FlyGym converted the joint
+stiffness (0.01 x 100 = 1.0, which is what it ships) and not the rest — the same
+partial-conversion pattern as the fluid medium.
+
+**Still untested, and now the leading suspects.** Both are geometric rather than
+parametric, which fits a failure that survives every magnitude change:
+
+1. The re-added wing fluid ellipsoid's *orientation*. `fly/wing_fluid.py` copies
+   quaternions verbatim from upstream's XML, but flygym's wing body frame may
+   not match upstream's, in which case the lift vector points somewhere useless.
+2. Whether flygym's yaw/roll/pitch joint axes are the axes the recorded pattern
+   was authored against. Commanded ranges match the pattern exactly, which
+   confirms the WPG is faithful but says nothing about whether flygym's "yaw" is
+   upstream's "yaw".
+
+**The decisive experiment is to run upstream flybody itself.** It is checked out
+at `~/code/playground/drosophila/flybody`. If its own flight task produces lift
+with this pattern, our port is broken and the diff localises it; if it does not,
+the premise that this model flies in MuJoCo is wrong and the whole flight goal
+needs rethinking. That separates the two possibilities in one run and should
+come before any further parameter search here.
+
+---
+
 ## 2026-09-19 — The measured wing pattern does not fix flight (`fly/render.py --wing-pattern`)
 
 Downloaded `datasets_flight-imitation.zip` (12.9 MB, md5 verified) from the
