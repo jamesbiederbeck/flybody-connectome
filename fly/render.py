@@ -39,6 +39,7 @@ def render(*,
            wingbeat_hz: float = WINGBEAT_HZ,
            flap: bool = True,
            hover: bool = False,
+           wing_pattern: str | None = None,
            eyes: bool = False,
            playback_speed: float = 0.005,
            camera_res: tuple[int, int] = (480, 640),
@@ -65,7 +66,10 @@ def render(*,
     if eyes:
         cameras += [f"{fly.name}/{s}_eye_cam_camera" for s in ("l", "r")]
 
-    wpg = WingBeatPatternGenerator()
+    # The measured base pattern from the flybody figshare dataset, when given.
+    # Without it the generator falls back to a bare sine that upstream's own
+    # docstring calls "not a substitute for a realistic base wing pattern".
+    wpg = WingBeatPatternGenerator(base_pattern_path=wing_pattern)
     wpg.reset(initial_phase=0.0)
 
     dt = float(model.opt.timestep)
@@ -109,6 +113,7 @@ def render(*,
         "flap": flap,
         "sim_ms": ms,
         "hover": hover,
+        "wing_pattern": wing_pattern or "bare sine (no base pattern)",
         "thorax_z_mm": [round(z[0], 3), round(z[-1], 3)],
         # Tethered this is meaningless (the thorax is welded); free it is the
         # whole question.  A fly that is flying sits above the parabola.
@@ -188,6 +193,8 @@ def main() -> None:
     p.add_argument("--medium", choices=("air", "flygym"), default="air")
     p.add_argument("--ms", type=float, default=200.0)
     p.add_argument("--wingbeat-hz", type=float, default=WINGBEAT_HZ)
+    p.add_argument("--wing-pattern", default=None,
+                   help="path to a measured base wing pattern (timesteps, 3)")
     p.add_argument("--hover", action="store_true",
                    help="gravity off; measure lift alone, uncontaminated by fall drag")
     p.add_argument("--no-flap", action="store_true",
@@ -217,7 +224,7 @@ def main() -> None:
     a.out = a.out or str(ROOT / "outputs/render/flight.mp4")
     a.playback_speed = 0.005 if a.playback_speed is None else a.playback_speed
     print(json.dumps(render(world=a.world, medium=a.medium, ms=a.ms,
-                            wingbeat_hz=a.wingbeat_hz, flap=not a.no_flap, hover=a.hover,
+                            wingbeat_hz=a.wingbeat_hz, flap=not a.no_flap, hover=a.hover, wing_pattern=a.wing_pattern,
                             eyes=a.eyes, playback_speed=a.playback_speed,
                             out=a.out), indent=2))
 

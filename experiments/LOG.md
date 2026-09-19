@@ -11,7 +11,94 @@ by the setup rather than the thing being measured.
 
 ---
 
+## 2026-09-19 — The measured wing pattern does not fix flight (`fly/render.py --wing-pattern`)
+
+Downloaded `datasets_flight-imitation.zip` (12.9 MB, md5 verified) from the
+flybody figshare record; it contains `wing_pattern_fmech.npy`, shape (500, 3),
+the measured base wing kinematics. Vendored to `assets/`.
+
+| | lift / weight | peak / weight |
+| --- | --- | --- |
+| bare sine | -0.0177 | 4.17 |
+| **measured pattern** | **-0.0158** | 4.51 |
+
+**No change.** The flight write-up named the bare sine as the cause of zero lift
+and explicitly labelled that an inference by elimination rather than a
+measurement. It has now been measured, and it was wrong.
+
+**A better candidate: the wing servo overshoots.** Commanded against achieved
+joint range, driven with the measured pattern at 218 Hz:
+
+| dof | commanded | achieved | ratio |
+| --- | --- | --- | --- |
+| yaw (the stroke) | -0.84 .. +1.41 | **-2.32 .. +2.74** | **2.26** |
+| roll | -0.32 .. +0.15 | -0.40 .. +0.15 | 1.16 |
+| pitch | -0.56 .. +2.14 | -0.61 .. +1.93 | 0.94 |
+
+FlyGym drives the wings with position actuators at gain 300/200/100; upstream
+flybody uses gain 18 with the spring and damping in `_WING_PARAMS`. At 218 Hz
+that servo rings and the wing sweeps 2.26x further than commanded, so the stroke
+kinematics are wrong regardless of which base pattern is supplied — which is
+why swapping the sine for the measured data changed nothing. Lift depends on the
+yaw/pitch phase relationship within the stroke, and that relationship is being
+distorted by the actuator, not by the pattern.
+
+Next: bring achieved into line with commanded (lower the yaw gain, or move to
+force actuators with upstream's spring/damping) and re-measure lift. Until the
+servo tracks, no pattern experiment means anything.
+
+**A methodology slip worth recording.** The first comparison returned identical
+numbers to four decimals for both patterns, because the `--wing-pattern` flag
+never reached `render()`: a string replacement missed its target and dropped the
+argument silently. Caught only because identical-to-four-decimals is
+implausible. The report now echoes which pattern was used, so a dropped argument
+is visible in the output rather than inferable from suspicious agreement.
+
+---
+
+## 2026-09-19 — Leave-one-out refutes the seven-cell claim (`haltere_leave_one_out.py`)
+
+**198 individually-silent afferents are not collectively silent.**
+
+| set | n | 8 mV | 14 mV | 20 mV |
+| --- | --- | --- | --- | --- |
+| all_205 | 205 | 1061 | 653 | 597 |
+| potent_7 | 7 | 894 | 895 | 1022 |
+| **silent_198** | 198 | **892** | 724 | 634 |
+
+Each of those 198 cells produces zero motor spikes driven alone; together they
+produce as much as the seven potent ones. Sub-threshold summation dominates, and
+the "interface is seven cells" conclusion from the single-cell sweep is
+**withdrawn**. This was the caveat recorded with that result, and testing it was
+the right call.
+
+**What survives, and is strengthened: the pathway is one-dimensional.** The
+response pattern of `silent_198` and `potent_7` are the same vector — cosine
+0.9999, 0.9996, 0.9987 at 8/14/20 mV — symmetric power muscles, essentially
+nothing on b1, b2 or hg1. So it is not that a few cells work; it is that every
+subset does the same thing. Three independent subsets now support that, rather
+than one analysis of seven cells.
+
+Two further facts: the pathway is **strongly sub-additive** (all_205 = 1061
+against potent + silent = 1786, ratio 0.59, falling to 0.36 at 20 mV), and
+**non-monotonic in current** (1061 -> 653 -> 597), the effect `AGENTS.md` warns
+about, now visible directly.
+
+**Consequence for the joystick.** A multi-axis haltere interface cannot be built
+from afferent identity in MaleCNS v1.0 — not because the right cells are
+undiscovered, but because every subset drives the same single output mode. The
+scalar `norm(omega)` in `proprioceptive_stimulation` is not an approximation to
+be improved; it is the true dimensionality of this pathway. If multi-axis
+information exists, it has to be carried by timing rather than identity, which
+is what the tau = 2 ms result opens.
+
+---
+
 ## 2026-09-19 — Single-cell sweep: the interface is seven cells (`haltere_single_cell.py`)
+
+**Superseded by the leave-one-out result above: the seven-cell framing is an
+artifact of testing cells one at a time.** The concentration measurement below
+is still accurate as stated — it is the conclusion drawn from it that was wrong.
 
 **198 of 205 haltere afferents produce exactly zero motor spikes when driven
 alone at 20 mV.** Gini 0.976; the top five cells account for 93% of all
