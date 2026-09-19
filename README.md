@@ -1,6 +1,6 @@
 # flybody-connectome
 
-A tethered *Drosophila* body, driven by the MaleCNS v1.0 connectome. Rendered
+A *Drosophila* body, driven by the MaleCNS v1.0 connectome. Rendered
 compound-eye input feeds modeled neural dynamics; decoded activity sets wingbeat
 frequency and steering deviation on a MuJoCo fly.
 
@@ -113,6 +113,70 @@ wiring is broken. Giving the arena visual structure (a patterned surround, a
 drifting grating, a looming disc) is the next step, and this control is how we
 will know it worked.
 
+## Does it fly?
+
+No. Put in a free-flight arena 60 mm up and it falls, lands on its back, and the
+wings go on beating. This was measured rather than assumed, and the measurement
+splits cleanly.
+
+```sh
+MUJOCO_GL=egl python -m fly.render --world flat --ms 200          # the fall
+MUJOCO_GL=egl python -m fly.render --world flat --hover --ms 300  # lift alone
+```
+
+| configuration | mean lift / body weight |
+| --- | --- |
+| wing fluid geoms (default) | **−0.023** |
+| `ellipsoid_fluid=True` | +0.075 |
+| `wing_fluid=False` | −0.001 |
+
+Peak vertical force reaches ~4x body weight within each beat, so the wings are
+moving plenty of air — it just cancels over the cycle. That is what a symmetric
+sine stroke does: with no asymmetry between down- and upstroke there is nothing
+to average out to lift. The cause is approximation 3 below, exactly as upstream's
+own docstring warns, and the fix is the follow-up already named there: fetch the
+measured base wing pattern from figshare. No amount of wing *geometry* helps; all
+three rows above are zero within noise.
+
+Two things this turned up, both of which would have produced a wrong answer:
+
+**FlyGym's fluid medium is in the wrong units, and `fly/body.py` corrects it.**
+`assets/model/flybody/mujoco_globals.yaml` converts gravity from the upstream
+cm-unit XML to mm — its own comment says "-981 cm/s^2 x10 -> mm" — and the
+rigging file converts every body density, but `option/density` and
+`option/viscosity` were left at their cm values. 0.00128 g/cm³ is air; 0.00128
+g/mm³ is 1280 kg/m³, denser than water. The fly is otherwise right (1.0 mg, 1.4
+mm wing), so as shipped it flaps in a liquid. `medium="air"` (the default) sets
+1.28e-6 and 1.85e-5; `medium="flygym"` keeps the shipped values for A/B. **In the
+shipped medium the fly sinks only 2.8 mm in 200 ms and looks nearly airborne** —
+a false positive worth about 1000x in density, and the reason the hover
+measurement above zeroes gravity rather than trusting the trajectory: a body in
+free fall sees an upward drag that `qfrc_passive` cannot tell from lift, and at
+terminal velocity that ratio goes to 1 no matter what the wings do.
+
+**The wingbeat was running at ~436 Hz.** The vendored WPG advances one control
+timestep (2e-4 s) per call and `play.py` called it once per 1e-4 s physics step,
+so the pattern played at double speed. The commanded trajectory looks correct
+either way; what gives it away is the achieved wing amplitude, which collapses
+from 2.8 rad to 1.2 rad because the position servos cannot track it. Both
+`play.py` and `render.py` now step it every other physics step.
+
+## Looking at it
+
+`fly/render.py` renders to video through MuJoCo's offscreen renderer — the
+`scene_cam` for the body, `--eyes` for the two compound-eye cameras, which is
+also the quickest check that the retina is pointed at anything.
+
+```sh
+MUJOCO_GL=egl python -m fly.render --world flat --ms 200 --out outputs/render/flight.mp4
+MUJOCO_GL=egl python -m fly.render --world tethered --eyes --ms 50
+```
+
+Playback is slowed ~200x by default: a wingbeat is 4.6 ms, so at 25 fps that puts
+about two frames in each beat. It runs open loop (pattern generator only, no
+connectome), because the questions worth rendering are physics questions the
+brain contributes nothing to.
+
 ## Accepted approximations
 
 Logged here and in `AGENTS.md` so they are not mistaken for settled science.
@@ -155,8 +219,11 @@ assumption on every bump.
 with the fluid medium. `fly/wing_fluid.py` re-adds them from the upstream XML.
 Neither model enables MuJoCo's *per-geom* ellipsoid fluid model — both rely on
 the global medium — so this restores an interaction volume rather than switching
-physics. Whether flight wants `fluidshape="ellipsoid"` is open;
-`build(ellipsoid_fluid=True)` turns it on for experiments.
+physics. `build(ellipsoid_fluid=True)` turns it on for experiments; measured, it
+changes net lift from −0.023 to +0.075 body weights, i.e. from zero to zero, so
+it settles nothing while the stroke pattern is a bare sine. In the shipped
+(1000x too dense) medium it also drives the wing joints hard enough to
+destabilise the integrator, which is not a fair test of it either.
 
 **6. Haltere input is engineered current injection**, not modeled campaniform
 transduction. Real afferents encode Coriolis forces on a beating haltere with
@@ -188,12 +255,13 @@ FlyGym downloads ~140 MB of meshes on first use and caches them.
 
 | Path | Contents |
 | --- | --- |
-| `fly/body.py` | FlyGym FlyBody + TetheredWorld construction |
+| `fly/body.py` | FlyGym FlyBody, tethered or free; fluid-medium correction |
 | `fly/retina_map.py` | Hex-lattice registration; pale/yellow channel collapse |
 | `fly/circuit.py` | Population selection: descending, power, steering, haltere |
 | `fly/controls.py` | Rate → continuous wing actuator decoder |
 | `fly/wing_fluid.py` | Re-adds the wing fluid/inertial geoms FlyGym drops |
 | `fly/play.py` | Headless run loop and JSON report |
+| `fly/render.py` | Video of a run; open-loop lift measurement |
 | `vendor/` | Wingbeat pattern generator, vendored from flybody |
 | `connectome_sim/` | The engine, as a submodule |
 

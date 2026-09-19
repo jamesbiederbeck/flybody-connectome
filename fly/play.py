@@ -31,6 +31,7 @@ def run(ticks: int = 300,
         dataset: str = "malecns_v1",
         *,
         brain_hz: float = 30.0,
+        world: str = "tethered",
         haltere_gain: float = 0.0,
         frozen_vision: bool = False,
         source: str = "descending",
@@ -41,6 +42,9 @@ def run(ticks: int = 300,
         ticks: Number of brain steps.
         dataset: Graph dataset name under `outputs/connectome_sim/`.
         brain_hz: Brain update rate; the decoded action is held between updates.
+        world: "tethered" or "flat" (free flight).  Free, the fly does not stay
+            up -- see README, "Does it fly?" -- but the thorax can rotate, which
+            is what makes `haltere_gain` carry any signal at all.
         haltere_gain: Current per rad/s injected into haltere afferents.  0
             disables proprioceptive feedback entirely.
         frozen_vision: Freeze the retinal input at the first frame.  This is the
@@ -56,7 +60,8 @@ def run(ticks: int = 300,
     from fly import body as body_mod
     from fly import circuit, retina_map
     from fly.controls import FlightControls
-    from vendor.pattern_generators import WingBeatPatternGenerator
+    from vendor.pattern_generators import (_FLY_CONTROL_TIMESTEP,
+                                           WingBeatPatternGenerator)
 
     graph = ROOT / "outputs/connectome_sim" / dataset / "graph.npz"
     if not graph.exists():
@@ -65,7 +70,7 @@ def run(ticks: int = 300,
         )
 
     brain = NativeBrain(str(graph))
-    fly = body_mod.build()
+    fly = body_mod.build(world=world)
 
     if source == "descending":
         controls = FlightControls.from_descending(brain)
@@ -78,10 +83,17 @@ def run(ticks: int = 300,
     mapping = _build_receptor_map(brain, fly, graph)
     wpg = WingBeatPatternGenerator()
     wpg.reset(initial_phase=0.0)
+    stroke = np.zeros(len(fly.wing_actuator_ids))
 
     duration_ms = 1000.0 / brain_hz
     physics_dt = float(fly.model.opt.timestep)
     substeps = max(1, int(round((duration_ms / 1000.0) / physics_dt)))
+    # The WPG advances one `dt_ctrl` per call and was written for flybody's 2e-4
+    # control timestep against a 1e-4 physics timestep, so it is stepped every
+    # other physics step.  Calling it every step doubles the wingbeat to ~436 Hz,
+    # which the position servos cannot track: achieved wing amplitude collapses
+    # from 2.8 rad to 1.2 rad while the command looks unchanged.
+    wpg_every = max(1, int(round(_FLY_CONTROL_TIMESTEP / physics_dt)))
 
     frozen = None
     history = {"wingbeat_hz": [], "offsets": [], "spikes": []}
@@ -106,8 +118,9 @@ def run(ticks: int = 300,
         history["offsets"].append(action["wing_offsets"].copy())
         history["spikes"].append(int(counts.sum()))
 
-        for _ in range(substeps):
-            stroke = wpg.step(ctrl_freq=action["wingbeat_hz"])
+        for i in range(substeps):
+            if i % wpg_every == 0:
+                stroke = wpg.step(ctrl_freq=action["wingbeat_hz"])
             fly.data.ctrl[fly.wing_actuator_ids] = stroke + action["wing_offsets"]
             fly.sim.step()
 
@@ -116,6 +129,7 @@ def run(ticks: int = 300,
     sim_seconds = ticks * substeps * physics_dt
     return {
         "dataset": dataset,
+        "world": world,
         "readout_source": source,
         "ticks": ticks,
         "seed": seed,
@@ -235,6 +249,7 @@ def main() -> None:
     p.add_argument("--ticks", type=int, default=300)
     p.add_argument("--dataset", default="malecns_v1")
     p.add_argument("--brain-hz", type=float, default=30.0)
+    p.add_argument("--world", choices=("tethered", "flat"), default="tethered")
     p.add_argument("--haltere-gain", type=float, default=0.0)
     p.add_argument("--frozen-vision", action="store_true",
                    help="control condition: freeze the retinal input")
@@ -243,7 +258,8 @@ def main() -> None:
     p.add_argument("--seed", type=int, default=0)
     args = p.parse_args()
     print(json.dumps(run(ticks=args.ticks, dataset=args.dataset,
-                         brain_hz=args.brain_hz, haltere_gain=args.haltere_gain,
+                         brain_hz=args.brain_hz, world=args.world,
+                         haltere_gain=args.haltere_gain,
                          frozen_vision=args.frozen_vision, source=args.source,
                          seed=args.seed), indent=2))
 

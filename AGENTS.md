@@ -31,6 +31,22 @@
 - FlyGym's FlyBody support is experimental upstream. Pin the version, and treat
   `tests/test_fly_body.py` as the tripwire: it asserts nu/nq, the wing actuators,
   the eye cameras, the restored wing fluid geoms and the ommatidia shape.
+- The fly does not fly. Measured net lift is −0.02 body weights with the bare
+  sine stroke, and no wing-geometry variant changes that; the stroke pattern is
+  the cause. Do not report flight without the `--hover` lift number, and do not
+  infer lift from a trajectory: a falling body sees an upward drag that
+  `qfrc_passive` cannot be distinguished from lift.
+- FlyGym ships the fluid medium in centimetre units while the model is in
+  millimetres (density 1000x, viscosity 10x too high). `fly/body.py` corrects it
+  by default; `medium="flygym"` reproduces the shipped values. In the shipped
+  medium the fly nearly hovers on a symmetric sine, which is drag in a
+  water-dense fluid, not lift. If a FlyGym bump fixes this upstream,
+  `test_flygym_medium_option_keeps_the_shipped_values` fails -- that is the
+  signal to drop the correction, not to change the expected value.
+- The vendored WPG advances one 2e-4 s control timestep per call. Step it once
+  per *two* 1e-4 s physics steps. Stepping it per physics step flaps at 436 Hz;
+  the commanded trajectory looks unchanged and only the achieved wing amplitude
+  reveals it.
 - Getting "off the WPG" means replacing kinematic replay with a thorax resonance
   model, not driving wing position from per-spike DLM activity. *Drosophila* is
   an asynchronous flier; per-beat neural patterning would be less faithful, not

@@ -6,12 +6,13 @@ meshes: a collision ellipsoid, a membrane collision ellipsoid, a zero-mass
 `{l,r}_wing_{brown,membrane}`, so the wing's interaction volume with the fluid
 medium is missing.
 
-That matters because MuJoCo derives fluid forces from geometry.  Both models set
-the same global medium (`density` 0.00128, `viscosity` 0.000185) and *neither*
+That matters because MuJoCo derives fluid forces from geometry.  Neither model
 enables the per-geom ellipsoid fluid model, so lift and drag come from the
 inertia-box model applied to whatever geometry each wing body actually has.
 Dropping the fluid ellipsoid therefore changes the aerodynamics rather than just
-the rendering.
+the rendering.  (Both models also carry the same *numbers* for the global medium,
+0.00128 and 0.000185 -- but those are cm-unit values and FlyGym's model is in mm,
+so it is 1000x too dense as shipped.  `fly.body` corrects it; see its docstring.)
 
 Numbers below are copied verbatim from `fruitfly.xml:388-389` (and the mirrored
 right-wing lines) with the `wing-fluid` / `wing-inertial` defaults at `:71-76`
@@ -19,8 +20,10 @@ folded in.  Upstream authors in cm; FlyGym works in mm, so lengths scale x10 --
 the same convention as `flygym/flybody/parse_flybody.py`.
 
 Whether flight additionally wants `fluidshape="ellipsoid"` set on these geoms is
-an open question.  Upstream does not set it, so the default here does not
-either; `ellipsoid_fluid=True` turns it on for experiments.
+open.  Upstream does not set it, so the default here does not either;
+`ellipsoid_fluid=True` turns it on for experiments.  Measured, it moves net lift
+from -0.023 to +0.075 body weights -- from zero to zero -- so it settles nothing
+while the stroke pattern is a bare sine.  See README, "Does it fly?".
 """
 
 from __future__ import annotations
