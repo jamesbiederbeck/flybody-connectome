@@ -11,7 +11,38 @@ by the setup rather than the thing being measured.
 
 ---
 
-## 2026-09-19 — 218 Hz by depth (`haltere_depth_phase.py`) — RUNNING
+## 2026-09-19 — 218 Hz by depth (`haltere_depth_phase.py`)
+
+**The bottleneck is the first synapse, not the afferents.** Every cluster
+phase-locks to a 218 Hz drive in its own spike train; not one passes it on.
+
+| cluster | 218 Hz depth0 | depth1 | 10 Hz depth0 | depth1 |
+| --- | --- | --- | --- | --- |
+| pooled_all | 27.77 | **0.27** | 14.69 | 5.42 |
+| SApp | 14.12 | **0.84** | 25.64 | 13.05 |
+| SNpp12 | 6.97 | **-0.89** | 6.20 | 1.88 |
+| SNpp23 | 42.04 | **0.20** | 7.73 | 2.02 |
+| SNpp20 | 26.15 | — | 2.10 | — |
+
+At 10 Hz the first synapse passes roughly half the locking (25.64 -> 13.05). At
+218 Hz it passes none, in every cluster, including SNpp23's z = 42 collapsing to
+0.2. This is the sharpest localisation of the problem so far, and it names the
+intervention: the ~1,443 hop-1 relay cells are where a faster membrane constant
+would have to go, not the afferents.
+
+**An anomaly worth following: SNpp23 antiphase does not cancel** (depth0 z =
+25.7, against 0.15 for pooled_all, -0.33 for SNpp12, 1.07 for SApp). Antiphase
+cancellation in a pooled L+R readout requires the two sides to contribute
+equally. SNpp23's three left and three right cells evidently do not — the same
+class of asymmetry found inside SNpp12, where one of two cells carried the whole
+cluster.
+
+`SNpp20` shows `None` at depths 1 and 3: no spikes at all in those readouts,
+consistent with its silence in the DC sweep.
+
+**Method note.** The depth-2 column is uninterpretable — see below — and the
+motor column reproduced the standalone phase experiment to the digit (4.61),
+which is a useful agreement between two separately written scripts.
 
 Reads out at four depths (stimulated afferents, hop-1 targets, hop-2 targets,
 wing motor) rather than only at the motor pool, so a 218 Hz null says *where*
