@@ -329,6 +329,20 @@ transduction. Real afferents encode Coriolis forces on a beating haltere with
 stroke-locked spike timing; we inject a scalar current host-side before the
 audited kernel runs. Same caveat `flappy-haltere` makes about its own drive.
 
+## Where to run this from
+
+Every command here runs from the **repository root** — the directory holding
+`connectome_sim/`, not from inside it and not from the parent.
+
+The engine resolves its paths relative to the consuming repo, not to its own
+checkout: `connectome_sim/prepare.py` takes `parents[1]` and
+`connectome_sim/physiology/common.py` takes `parents[2]`, and both land on this
+repo's root. So `connectome_data/` is read from here and
+`outputs/connectome_sim/` is written here. Run from anywhere else and the paths
+resolve outside the checkout, usually to a `FileNotFoundError` naming a
+directory one level up. `python -m ...` also needs the root on `sys.path`,
+which is what running from there gives you.
+
 ## Guide
 
 `GUIDE.md` covers running and extending this: the two-clock structure, the
