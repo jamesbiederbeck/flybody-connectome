@@ -276,6 +276,107 @@ the open-loop default of 0.005 puts ~23 frames in each 4.6 ms wingbeat — right
 for inspecting a stroke, far too many for a whole fall. `--brain` defaults to
 0.04, about 3 frames per beat.
 
+## Scenarios
+
+Every runnable experiment in this repo, with the flags that matter. All of them
+want `MUJOCO_GL=egl` — that renders the eye cameras on the GPU, and the software
+fallback `osmesa` is about 4.6x slower on a 200-tick run (515 s against 111 s).
+The backend is not only a speed choice: it changes results, because the eye
+cameras sit inside the control loop and different rasterisation gives different
+retinal input. See "Accepted approximations".
+
+Python is the shared `../.venv-unified` (3.12, numpy 2.5.3, flygym 2.1.0,
+mujoco 3.9.0). Do not build a per-repo copy.
+
+```sh
+PY=../.venv-unified/bin/python
+export MUJOCO_GL=egl
+```
+
+### Vision to wings, and its control
+
+```sh
+$PY -m fly.play --ticks 300                  # live vision
+$PY -m fly.play --ticks 300 --frozen-vision  # control: retina frozen at frame 1
+```
+
+The control is the point. Vision currently perturbs the steering channel and
+leaves wingbeat frequency identical to 16 decimal places.
+
+### The leg loop, and the controls that matter
+
+```sh
+$PY -m fly.walk --ticks 200 --motor-gain 5                   # closed
+$PY -m fly.walk --ticks 200 --motor-gain 5 --frozen-sense    # sensing cut
+$PY -m fly.walk --ticks 200 --motor-gain 5 --no-sense        # no injection
+$PY -m fly.walk --ticks 200 --open-loop                      # weak control
+$PY -m fly.walk --ticks 200 --motor-gain 5 --body            # + halteres/abdomen/neck
+$PY -m fly.walk --ticks 200 --motor-gain 5 --video out.mp4
+```
+
+`--frozen-sense` is the real control: it keeps the motor path connected and cuts
+only the sensing. `--open-loop` cuts the actuators instead, which only shows
+that writing actuators moves the body and is kept as a cautionary example.
+
+`--body` adds the haltere, abdomen and neck maps from `fly/motor.py`, taking
+motor coverage to 526 of 708 cells and 60 of 110 actuators.
+
+### Motor babble, for fitting rather than guessing
+
+```sh
+$PY -m fly.babble --ticks 2000 --density 0.3 --max-current 12
+```
+
+Sparse random current across the 19 sensory subclasses with inputs and outputs
+logged per tick, as a dataset for asking which inputs move which outputs.
+
+### The fly swatter
+
+```sh
+$PY -m fly.swat --ticks 200 --condition live
+$PY -m fly.swat --ticks 200 --condition frozen   # swatter descends, retina frozen
+$PY -m fly.swat --ticks 200 --condition absent   # no swatter
+$PY -m fly.swat --ticks 200 --condition live --no-motor
+$PY -m fly.swat --ticks 200 --condition live --no-motor --inject-lamina 50
+$PY -m fly.swat --ticks 200 --condition live --video swat.mp4 --playback-speed 1.0
+```
+
+**`--no-motor` is not optional for a measurement.** The leg loop's injection
+holds the network at ~59k spikes/tick against a ~21k resting rate, and in that
+saturated regime the looming detectors and DNp01 are suppressed regardless of
+what is overhead. Two experiments here were invalidated by forgetting it.
+
+`--inject-lamina` bypasses the photoreceptor transfer function and drives the
+lamina directly, each cell from the mean luminance of the photoreceptors that
+actually synapse onto it, taken from the graph. It exists because the
+photoreceptor curve compresses a 44% luminance change into under 3% of current.
+
+`--playback-speed` is seconds of simulation per second of video; 1.0 is real
+time. The 0.005 default in `fly/render.py` is for inspecting a 4.6 ms wingbeat
+and turns a 6.7 s descent into a 2:46 video.
+
+### Firing the giant fibre
+
+```sh
+$PY -m fly.jump --ticks 120 --currents 0 20 40 60
+$PY -m fly.jump --ticks 120 --currents 0 40 --leg-sense   # confounded, for comparison
+```
+
+Injects DNp01 from tick 30 and measures body height, vertical velocity and
+ground contacts rather than spikes. `--leg-sense` restores the saturating leg
+injection and is off by default for the reason above: with it on, DNp01 cannot
+be made to fire at any current.
+
+### Rendering on its own
+
+```sh
+$PY -m fly.render --world flat --ms 200 --playback-speed 0.04
+$PY -m fly.render --world flat --brain --ticks 10
+```
+
+Open loop by default, because the usual question there is a physics one the
+brain contributes nothing to.
+
 ## Accepted approximations
 
 Logged here and in `AGENTS.md` so they are not mistaken for settled science.

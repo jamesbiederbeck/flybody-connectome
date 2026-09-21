@@ -11,6 +11,726 @@ by the setup rather than the thing being measured.
 
 ---
 
+## 2026-09-20 — Leg-drive gain threshold: the walking latch is a step function, not a ramp (`experiments/leg_gain_threshold.py`)
+
+**Asked:** turn down `fly/legs.py`'s leg-sensory drive gains and see whether the
+walking loop settles into a less-saturated intermediate state instead of the
+full `cb_intrinsic` ~32 Hz/cell attractor already measured in
+`walk-characterization.json`.
+
+**Result: no intermediate state exists.** Swept `proprioceptive_gain`/
+`tactile_gain` together as a fraction of default (6.0/8.0), fresh brain and
+body per condition, 200 ticks/60 settle/motor_gain 5.0 throughout:
+
+| fraction | gains | cb_intrinsic Hz | displacement |
+| --- | --- | ---: | ---: |
+| 1.0x (default) | 6.0 / 8.0 | 32.06 | 3.64 mm |
+| 0.9x | 5.4 / 7.2 | 29.27 | 2.65 mm |
+| 0.8x | 4.8 / 6.4 | 0.00 | 0.04 mm (floor) |
+| 0.7x – 0.01x | — | 0.00 | 0.04 mm (floor) |
+
+Everything from 0.8x down is indistinguishable from the network's own resting
+floor -- the fly does not walk at all. The transition sits in a narrow band
+between 0.8x and 0.9x of default gain, and even at 0.9x the network is already
+most of the way to full saturation (29.27 of 32.06 Hz), not partway. This is
+the same two-states behaviour as
+[`findings/02-two-states.md`](../../connectome-lab/findings/02-two-states.md),
+now confirmed along the leg-loop's own drive-gain axis rather than isolated
+pulse amplitude.
+
+---
+
+## 2026-09-20 — SApp latch, fine-grained: the "saturated attractor" is the mushroom-body/antennal-lobe circuit, not a uniform seizure (`experiments/sapp_latch_census.py`)
+
+**Asked:** the existing SApp/CRZ latch characterization only went to
+`superclass`/`subclass` resolution (27/49 values). Re-run the identical
+SApp\_pair\_30mV protocol (drive 30 mV/500 ms on SApp\_R body\_id 101048 +
+SApp\_L body\_id 136883, 500 ms dark settle, 1000 ms post-drive-removed
+window) and report at `class`, `entryNerve`, `exitNerve` and `somaNeuromere`
+resolution -- all measured annotation columns, not inferred groupings.
+
+**Result: the latch is not uniform.** By `class`:
+
+| class | cells | latched Hz |
+| --- | ---: | ---: |
+| MBON | 97 | 228.0 |
+| ALLN | 420 | 180.4 |
+| DAN | 340 | 153.0 |
+| ALPN | 686 | 128.1 |
+| Kenyon_Cell | 4,064 | 122.6 |
+| CX | 2,950 | 12.7 |
+| olfactory | 2,639 | 7.8 |
+| visual | 6,091 | **0.0** |
+| mechanosensory (all 3 classes) | 5,756 | **0.0** |
+
+The entire mushroom-body/antennal-lobe circuit (MBON, DAN, ALPN, ALLN, Kenyon
+cells -- the same KC-to-MBON11 wiring `findings/05-plasticity-cannot-reach-
+the-controller.md` already identified as the engine's only plasticity locus)
+fires at 4-7x the superclass-level ~32 Hz average, while vision and every
+mechanosensory class stay at exactly zero throughout. `somaNeuromere` agrees:
+deutocerebrum (DC, where the antennal lobes sit) is hottest at 132.9 Hz, over
+5x the next segment, while the thoracic segments (T1-T3, where leg motor
+circuitry lives) are the *lowest* of any driven segment at 2.8-3.5 Hz.
+`entryNerve` shows only the antennal nerve (AN) and pharyngeal nerve (aPhN)
+carrying meaningful drive; every leg and abdominal nerve trunk sits at zero.
+
+Baseline is 0.000 Hz everywhere in this table -- not because the latch
+suppresses those classes, but because the network's own dark resting state is
+already close to silent (see the extended zero-stimulation baseline run
+referenced in this session). So this is a rise from a silent floor into the
+AL/MB circuit specifically, not a shift between two nonzero levels, and not a
+generic whole-brain runaway. A haltere afferent (SApp) has no obvious
+anatomical reason to have privileged access to the mushroom body over vision
+-- promoted to `findings/09-the-latch-is-the-mushroom-body.md`.
+
+---
+
+## 2026-09-20 — Scent taxis: delivery-verified null, and the displacement metric's own run-to-run noise turns out bigger than any effect it could show (`experiments/scent_taxis.py`)
+
+**Asked:** does a fixed static scent source bias the leg loop's net walking
+direction? Layer one more channel onto `fly/legs.py`'s existing stimulation
+list -- olfactory current into ORN_DA1, split left/right by bearing to the
+source -- and measure net displacement projected onto the fly-to-source
+direction, plus `cb_intrinsic` as the saturation check.
+
+**Invented choices, stated up front.** Glomerulus **ORN_DA1**: one of ~50
+glomerulus types with a mapped ORN population (204 cells; `rootSide` splits
+105 R / 51 L / 48 `unknown`, matching the `instance` suffix exactly) --
+picked arbitrarily among the available glomeruli, not a claim about what this
+population smells biologically. The 48 unknown-laterality cells are excluded
+from injection; only the 156 sided cells are driven, and that R/L imbalance
+(105 vs 51) is an inherited bias in exactly the sense `AGENTS.md` already
+flags for the eyes (1,107 left / 2,228 right) -- an asymmetric response here
+cannot be attributed to the scent's side without ruling that out, and this
+run does not rule it out. Falloff: `exp(-distance / 10mm)`, invented for
+having the right qualitative shape, no measurement behind the length scale.
+Gain 8 mV, same order as `fly.legs`'s own tactile gain, also invented. L/R
+split by the cosine of bearing against the fly's right-axis (dead ahead =
+50/50, abeam one side = ~100/0) -- an engineered proxy for "which side smells
+it more," not a measured convergence rule. Heading read via
+`mujoco.mju_rotVecQuat` on the thorax quaternion, local +y forward / +x
+right, per `fly.body`'s own scene-camera comment ("+y forward, +z up"); no
+new orientation math. Source placed 15 mm from spawn (about 2x the ~6.7 mm
+leg-loop-plus-body displacement this session's own characterization measured
+at the same motor gain). **No scent-CRZ association was attempted or
+simulated** -- this project's only plasticity is the fixed 4,184-edge
+KC->MBON11 pathway, CRZ is confirmed separately to not be part of it, and
+there is no learning mechanism here that could produce a real one.
+
+**Four conditions, each a fresh `NativeBrain` + fresh `fly.body.build()`**
+(this project's own convention -- reused state has produced wrong answers
+before): scent ahead, behind, to one side (right, arbitrary), and no-scent,
+200 ticks, 60 settle, motor-gain 5, brain-hz 30 -- matching this session's own
+leg-loop characterization for comparability.
+
+| condition | displacement vec (mm) | toward-source (mm) | cb_intrinsic Hz/cell | total spikes |
+| --- | --- | ---: | ---: | ---: |
+| ahead | (4.379, -0.449, -0.067) | -0.449 | 31.898 | 10,581,831 |
+| behind | (2.915, 1.925, -0.156) | -1.925 | 31.887 | 10,572,789 |
+| side | (1.735, 3.639, -0.108) | 1.735 | 31.921 | 10,594,613 |
+| none | (5.102, -2.230, -0.252) | -- | 31.895 | 10,582,201 |
+
+Differencing against `none` projected onto each condition's own bearing
+(`d_none . bearing`: ahead -2.230, behind 2.230, side 5.102) gives deltas of
+**+1.781 (ahead), -4.155 (behind), -3.367 (side)** -- no consistent sign, no
+shape that reads as "toward" or "away." Spike totals across all four spread
+only 0.2% (10.573M-10.595M) and `cb_intrinsic` spreads 0.1%, while the
+trajectories' headings spread roughly 88 degrees. That heading spread is
+addressed below -- it turns out not to require an injection at all.
+
+**The reproducibility check that changes what this table can claim.** Reran
+the no-scent condition with parameters identical in everything that reaches
+the `none` arm (gain and distance are unused when there is no source; only
+`--conditions`/`--out` differed, as part of the gain-54 arm below):
+displacement **3.012 mm**, vector (2.999, -0.219, -0.180) -- against the
+first run's 5.573 mm, (5.102, -2.230, -0.252). Same code, same seed, nothing
+injected. Displacement magnitudes differ by 2.56 mm; the two endpoints
+themselves are 2.91 mm apart in space, (2.103, -2.011, -0.072); and heading
+differs by roughly 19 degrees between them. Total spike counts between the
+two `none` runs differed by only 1,770 out of 10.58M (0.017%), so a tiny
+per-tick difference is being chaotically amplified into a large displacement
+difference over 200 ticks. **This means the ~88 degree heading spread and the
+"very different place" reading of the main table are not attributable to the
+olfactory injection at all** -- the same spread appears between two runs of
+the identical no-op condition. Cause is **inferred, not measured**: the only
+non-deterministic input in this loop is the per-tick `mapping(fly.ommatidia())`
+camera render, which `connectome-lab/REPRODUCIBILITY.md` (rule 4) already
+documents as not run-to-run identical because the eye cameras sit inside the
+control loop -- this was not isolated or confirmed here, only the divergence
+itself was measured.
+
+**Recomputing the deltas against this second `none` sample makes the point
+directly, with no new runs needed:**
+
+| bearing | delta vs `none` #1 (5.102, -2.230) | delta vs `none` #2 (2.999, -0.219) |
+| --- | ---: | ---: |
+| ahead | +1.781 | -0.230 |
+| behind | -4.155 | -2.145 |
+| side | -3.367 | -1.264 |
+
+Every delta shifts by roughly 2 mm between the two choices of baseline, and
+`ahead` **flips sign**. The differenced metric is not measuring the scent; it
+is measuring which of two equally-valid no-scent samples happened to be
+picked as the reference. **None of the ahead/behind/side deltas can be
+attributed to scent direction on this evidence.**
+
+**A delivery-verified null, not an underpowered one.** Raising gain to 54 mV
+(peak injected 12.05 mV at 15 mm, vs. 1.78 mV in the main run) drove ORN_DA1
+to **46.6 Hz/cell (R) / 40.2 Hz/cell (L)**, against 1.32/1.78 Hz/cell with no
+injection at all -- roughly 30x. `cb_intrinsic` moved 31.894 -> 33.062. So the
+stimulus demonstrably reaches and drives the target population hard. The
+`side` displacement at this gain was 4.137 mm, (1.406, 3.884, -0.224) -- not
+distinguishable in kind from the 8 mV run's 4.033 mm, and still inside the
+noise band the reproducibility check established. This rules out "the signal
+was too weak to matter" as the explanation for the null.
+
+**A symmetric-split control** (same total intensity and time-course, forced
+50/50 L/R, run at the original 8 mV `side` condition) gave 2.809 mm, (2.799,
+0.198, -0.135), toward-source 2.799 mm -- a similar order of magnitude to the
+directional `side` arm's 1.735 mm. It was meant to separate a direction-
+specific effect from generic perturbation (`experiments/jo_specificity_control.py`
+asks the same question about JO), but with the no-injection control itself
+varying by 2.56 mm between two identical runs, this comparison is subsumed by
+the reproducibility finding above and cannot do that discriminating work here.
+
+**Design limitation, stated rather than glossed over:** `ahead` and `behind`
+both start at lateral ~0 (50/50 L/R) at tick 0 -- the injection scheme
+carries no front/back information, only left/right. Over the run they diverge
+only in total delivered intensity as distance closes or opens, not in a
+fore/aft signal, so that pair is not a tested fore/aft contrast.
+
+**Baseline was already saturated.** `cb_intrinsic` sits at ~31.9 Hz/cell with
+the leg loop alone and no scent at all, matching the ~32-33 Hz/cell signature
+`findings/02-two-states.md` and this session's own SApp/leg-loop entries use
+for the generic saturated attractor. So there was no sub-saturation dynamic
+range for a graded scent signal to act within even before the reproducibility
+problem is considered -- consistent with the standing prior that a
+weak-to-strong odor gradient either does nothing or pushes into the same
+generic regime regardless of direction. It also fits this session's separate
+finding that this network does not drift into that state at rest (12.5 s flat
+baseline, `cb_intrinsic` at exactly 0) -- here the leg loop alone is already
+enough to hold it saturated, before any scent is added.
+
+**Conclusion.** No directional bias found, and the null is not attributable
+to insufficient stimulus strength (delivery-verified at ~30x baseline ORN
+firing). But the sharper finding is methodological: net thorax displacement
+over 200 ticks, driven through this leg loop, is not reproducible run-to-run
+by more than the effect sizes this experiment was built to detect, for
+reasons not isolated here (inferred: the per-tick retinal render). That
+ceiling applies to any future experiment using displacement-toward-a-target
+as a metric on this leg loop, not just this one -- worth fixing (isolate and
+either eliminate or characterize the render noise, or take enough repeats per
+condition to average it out) before trusting a displacement-vector result
+from this harness again.
+
+Status: measured; null, with the run-to-run noise floor identified but not
+characterized or fixed -- that characterization is the natural follow-up and
+was not done in this session. Output: `outputs/scent_taxis/run.json`,
+`run_suprathreshold.json`, `run_symmetric_control.json`.
+
+---
+
+## 2026-09-20 — SApp pulsatile drive: a threshold in pulse count, not a frequency tuning curve (`haltere_sapp_pulse.py`, experiment 1)
+
+**Asked:** drive SApp's two responsive cells (101048 R, 136883 L — see the
+2026-09-19 single-cell-sweep entry) with discrete spike-timed pulses instead of
+DC, in phase, and sweep frequency.
+
+**Setup.** Pulse width 1 ms — invented, chosen short relative to the 20 ms
+membrane tau and 1.8 ms synaptic delay so a pulse approximates one input spike
+rather than a sustained step. Amplitude calibrated per cell (smallest single
+1 ms pulse that reliably fires it once from a fresh reset): both cells needed
+150 mV, well above the 20 mV that fires them over a 500 ms sustained window —
+an isolated 1 ms pulse has to cross threshold on its own, with no time to
+integrate. Shared 150 mV used for both cells throughout. Frequencies 5, 10, 30,
+60, 120, 218, 300, 400 Hz, both cells pulsed in phase, 1000 ms window, 1 ms
+bins, fresh reset per frequency. Readouts: b1/b2/hg1/power (`haltere_axis_pairs`
+groups) plus an added DLM-only split and a global spike count.
+
+**Zero response below 120 Hz, then falling response per pulse above it.**
+
+| f (Hz) | pulses | response/window | response/pulse |
+| ---: | ---: | ---: | ---: |
+| 5–60 | 5–60 | 0 | 0 |
+| 120 | 120 | 2320 | 19.3 |
+| 218 | 218 | 2674 | 12.3 |
+| 300 | 300 | 2574 | 8.6 |
+| 400 | 400 | 2547 | 6.4 |
+
+(response/window = summed non-baseline spikes across b1/b2/hg1/power readouts,
+DLM excluded from the sum since `power` already contains both DLM types and
+summing both double-counts it — DLM is still reported per-trial in full.
+Baseline is exactly 0 for every readout group under dark/no-sugar input,
+confirmed both as a single 1000 ms call and as 2000×0.5 ms calls with no
+stimulation, so non-baseline subtraction is a no-op here, not a correction.)
+
+**This is not evidence of frequency tuning, and it is not evidence of a clean
+pulse-count integrator either — it's a threshold in total pulses plus falling
+per-pulse efficacy above it, and the two are confounded in this sweep.** Below
+120 Hz nothing gets through at all (0 of 120 pulses' worth of drive reaches the
+readouts); above it, response per pulse falls monotonically (19.3 → 12.3 → 8.6
+→ 6.4) as frequency rises. Because frequency and pulse count move together
+across this sweep (a fixed 1000 ms window means higher Hz is also more
+pulses), this cannot distinguish "the floor is at ~120 pulses" from "the floor
+is at ~120 Hz" — that is an open question, not resolved here. Selection rule
+for experiment 2: largest summed non-baseline response (218 Hz), plus any
+frequency within 20% of it (300 and 400 Hz both qualified; kept the top two,
+218 and 300 Hz — invented margin, stated here). Reset verified: repeating the
+first frequency (5 Hz) after the full sweep reproduced exactly.
+
+**A numerical caveat found and avoided, not the pathway's own property.**
+Reducing the per-call step duration below `bin_ms=0.25` (down to 0.1 ms,
+tried while chasing phase resolution for experiment 2 below) silently zeroes
+every wing-motor readout group while the network's own global spike count
+stays large — the directly-stimulated cells and general network activity keep
+firing, but nothing registers in b1/b2/hg1/power/DLM. This reproduces at both
+200 ms and 1000 ms windows, so it is not a duration effect; it is a
+sensitivity of this engine to very short per-`Brain.step` durations, not
+tested further here. `bin_ms=0.5` (already used in `haltere_depth_phase.py`)
+does not show it and is used throughout.
+
+Status: measured, complete. Output: `outputs/haltere_sapp_pulse.json`
+(`experiment1`).
+
+---
+
+## 2026-09-20 — SApp pulsatile drive: phase between the two cells changes the response, but not in a shape this design can characterize (`haltere_sapp_pulse.py`, experiment 2)
+
+**Asked:** at the frequency(ies) experiment 1 favoured, sweep the phase offset
+of R (101048) relative to L (136883) from -180 to +180 degrees.
+
+**Setup.** 218 and 300 Hz (experiment 1's selection), 13 phase steps at 30
+degree spacing (-180 to +180 inclusive), same 150 mV/1 ms pulses. Verified,
+not assumed: total pulse count per cell is exactly constant across all 13
+phases at both frequencies (218 and 300 respectively) — computed directly from
+the pulse-bin schedule, so the spread below is not an artifact of some phase
+conditions delivering more pulses than others.
+
+**Bin size mattered more than expected, and the fix is recorded so it isn't
+rediscovered.** 30-degree steps are a 0.38 ms (218 Hz) / 0.28 ms (300 Hz) time
+shift — smaller than experiment 1's 1 ms bins, so most of the 13 phases would
+have snapped onto the same discretized pulse pattern there. Dropping bin size
+to resolve this hit the `bin_ms<=0.25` engine artifact noted in experiment 1's
+entry; settled on `bin_ms=0.5`, window shortened to nothing (kept at 1000 ms,
+same as experiment 1) — 12 of 13 phase conditions are distinguishable at both
+frequencies (the theoretical ceiling: -180 and +180 degrees are the same
+condition by construction).
+
+**The response does vary with phase, and at a different scale per frequency:**
+
+| frequency | min | max | spread |
+| ---: | ---: | ---: | ---: |
+| 218 Hz | 2827 | 3532 | 25% |
+| 300 Hz | 2805 | 3148 | 12% |
+
+This is on a bit-reproducible native simulation (the same reset-verification
+convention as experiment 1's; repeating a trial exactly reproduces it), and
+pulse count is held exactly constant across phase, so the spread is real and
+attributable to relative timing, not to noise or to a pulse-count confound —
+both checked, not assumed. **What it does not establish is a phase code.**
+Response varies with phase; whether that variation is a smooth, systematic
+function of phase (a real tuning curve) or an irregular sensitivity to which
+bins the pulses happen to land in was not tested — no shape (sinusoidal,
+peaked, monotone) was fit, and none should be inferred from 12 points with no
+repeat-trial baseline. The two frequencies also differ in how much they vary
+(25% vs 12%), which is itself worth carrying forward rather than averaging
+into one number.
+
+**Answer to the motivating question (LOG's 2026-09-19 leave-one-out entry:
+"can SApp's own L/R balance support a differential control line?"):** the two
+cells' drive sums — the pathway responds to pulses on either/both cells, per
+experiment 1 — but nothing here shows it *compares* them. A control line built
+on relative timing between SApp-L and SApp-R would need a demonstrated,
+repeatable phase-response shape, which this design did not establish either
+way.
+
+Status: measured, complete, with an open question flagged (phase-response
+shape untested). Output: `outputs/haltere_sapp_pulse.json` (`experiment2`).
+
+---
+
+## 2026-09-20 — SApp continuous drive: no sub-threshold summation, and "direction matters" turns out to mean "which cell crosses its own threshold" (`haltere_sapp_threshold.py`, experiment 3)
+
+**Asked:** on SApp's two responsive cells, at DC/tonic current: (3a) each
+cell's own threshold, swept 20 mV down to 0 in 1 mV steps; (3b) whether driving
+both together lowers the threshold below either alone; (3c) whether the
+*direction* of the (V_L, V_R) drive vector matters, holding its magnitude
+fixed.
+
+**3a — clean, monotone individual thresholds, and they differ.** 500 ms
+sustained drive (`SUSTAIN_MS`, matches `haltere_axis_pairs.py`'s convention),
+DLM spike count as the crossing readout. R (101048): 0 DLM spikes at 14 mV,
+328 at 15 mV — threshold 15 mV. L (136883): 0 at 17 mV, 337 at 18 mV —
+threshold 18 mV. Both monotone (no zero above their threshold once crossed) at
+this resolution — this pathway is documented non-monotone in current
+elsewhere in this repo (leave-one-out entry, 1061→653→597), so monotonicity
+here was checked, not assumed, and it held. Reset verified: repeating each
+sweep's first voltage reproduced exactly.
+
+**3b — the joint threshold equals R's own threshold, not below it.** Both
+cells driven equally, stepped down from 19 mV (`max(15,18)+1`) in 0.5 mV
+steps: nonzero DLM at 15.0 mV (323 spikes), zero at 14.5 mV. **No sub-threshold
+summation** — R's own 15 mV threshold is the whole story; L's simultaneous
+15 mV (2 below its own 18 mV solo threshold) contributes nothing measurable to
+crossing it earlier. This directly answers the caveat flagged in the
+2026-09-19 single-cell-sweep entry ("silent alone is not the same as
+contributing nothing in combination") for this specific pair: **it is** the
+same. Full range swept to 0 mV with no early stopping, because early-stopping
+on the first zero would have assumed monotonicity this repo's own findings say
+not to assume.
+
+**3c — direction matters, and it has a mechanistic explanation: whichever
+component crosses its own individual threshold.** Magnitude fixed at
+`M = sqrt(2) * 15.0 = 21.21 mV` (3b's joint threshold's Euclidean norm, since
+3b drives both cells equally); angle swept 0-90 degrees, `V_L = M*cos(theta)`,
+`V_R = M*sin(theta)`. This is one operational reading of an ambiguous
+instruction, stated here so the result is interpretable independent of that
+choice: a genuine 2D vector sweep at constant Euclidean norm, not a fixed-sum
+allocation.
+
+| theta | V_L | V_R | DLM | L alone supra (>=18)? | R alone supra (>=15)? |
+| ---: | ---: | ---: | ---: | :---: | :---: |
+| 0.00 | 21.21 | 0.00 | 391 | yes | — |
+| 11.25 | 20.81 | 4.14 | 390 | yes | no |
+| 22.50 | 19.60 | 8.12 | 372 | yes | no |
+| **33.75** | **17.64** | **11.79** | **0** | **no** | **no** |
+| 45.00 | 15.00 | 15.00 | 323 | no | yes (at) |
+| 56.25 | 11.79 | 17.64 | 397 | no | yes |
+| 67.50 | 8.12 | 19.60 | 393 | no | yes |
+| 78.75 | 4.14 | 20.81 | 350 | no | yes |
+| 90.00 | 0.00 | 21.21 | 550 | — | yes |
+
+Every one of the 9 points is explained by that two-column rule with no
+residual: response is zero exactly once, at theta=33.75 degrees, which is
+exactly the one point where *neither* component's own share reaches that
+cell's own 3a threshold (V_L=17.64 < 18, V_R=11.79 < 15) — and 3b already
+established there is no cross-cell summation to bridge that gap. Every other
+point has at least one component individually supra-threshold and gives a
+nonzero response of the same rough scale as that cell's own 3a sweep at a
+similar voltage. **So "direction matters" is true, but not because of any
+joint directional tuning** — it is fully accounted for by two independent
+per-cell thresholds and the absence of summation between them (3b). theta=45
+degrees (V_L=V_R=15.0) reproduces 3b's V_each=15.0 mV row exactly (DLM 323,
+global 464346 both times) — the two code paths for equal joint drive agree to
+the digit, which is the sanity check this design was built to allow, not an
+independent finding.
+
+Status: measured, complete. One bug found and fixed before this ran clean:
+`_find_threshold` looked up the wrong dict key for the joint/direction rows
+(`voltage_mV` vs `voltage_each_mV`), caught by the crash it caused rather than
+silently returning a wrong threshold. Output:
+`outputs/haltere_sapp_threshold.json`.
+
+---
+
+## 2026-09-20 — Firing the giant fibre embodied: a postural twitch, not a jump
+
+**Asked:** fire DNp01 in the body and see whether the fly leaves the ground.
+
+**Setup.** `fly/jump.py`. TTMn and STTMm are classified `wm` in this dataset,
+but the tergotrochanteral muscle acts on the trochanter and its job is the
+mesothoracic leg extension that launches a takeoff, so `fly/motor.py` maps it to
+the middle leg's trochanter-femur extension. That mapping is inferred from the
+muscle's name and known action, not measured here. Leg and body motor maps
+active throughout; injection into the 2 DNp01 cells from tick 30 of 120.
+
+**First run was confounded, again, in the way the swatter run was.** With the
+leg loop's sensory injection active, `dnp01_per_tick` was **0.0 at every
+current including 40**. That injection holds the network at ~59k spikes/tick
+against a ~21k resting rate, and in that saturated regime DNp01 is suppressed
+and cannot be fired at all -- which E-GF had already measured as the giant
+fibre's own rate collapsing under high drive. The leg sensory injection is now
+off by default in this runner, with the motor path still connected so the body
+can move.
+
+**Result, network at rest:**
+
+| DNp01 current | DNp01/tick | TTM/tick | rise | peak upward velocity | min contacts | airborne ticks |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 0.00 | 0.00 | 0.0015 mm | 0.0003 | 7 | 0 |
+| 20 | **4.90** | 0.683 | 0.024 mm | 0.201 | 5 | 0 |
+| 40 | 0.342 | 1.583 | **0.124 mm** | **2.221** | **1** | 0 |
+| 60 | 0.00 | 2.392 | 0.154 mm | 1.537 | 2 | 0 |
+
+1. **Something real happens.** The uninjected control is motionless -- 0.0015 mm
+   of drift, all seven contacts held. At current 40 the body rises 0.124 mm with
+   a peak upward velocity of 2.22 mm/s and contacts drop from 7 to 1, which is
+   five legs coming off the ground.
+
+2. **It is not a jump.** `airborne_ticks` is **0** in every arm. The fly never
+   leaves the ground. A 0.15 mm rise on a body sitting 1.24 mm up is a postural
+   twitch.
+
+3. **The giant fibre suppresses itself as drive rises.** DNp01 goes 4.90 →
+   0.342 → 0.00 across currents 20, 40, 60 while TTM output keeps climbing
+   0.683 → 1.583 → 2.392. The downstream effect grows while the driven cell
+   falls silent, which is the same signature E-SIGN found in the haltere
+   pathway and E-GF found on spikes alone.
+
+**Conclusion.** The escape pathway produces a measurable, controlled postural
+response from the giant fibre down, and does not produce a takeoff. Whether that
+is because TTM is mapped to a single joint, because the gains are hand-set,
+or because a real jump needs coordinated multi-joint extension with wing
+deployment, is untested. The honest statement is that firing DNp01 lifts five
+of six legs and moves the body a tenth of a millimetre.
+
+**Repeated mistake worth naming.** This is the second time a saturating current
+injection has silently invalidated a measurement in this repo -- first the
+swatter, now the giant fibre. Any experiment that measures a specific
+population's firing needs the rest of the injection off, or it is measuring the
+attractor.
+
+---
+
+## 2026-09-20 — Light adaptation added to the photoreceptors; it helps 4-8x and is not enough
+
+**Asked:** are we stimulating the visual system wrong? Then: fix it, opt-out.
+
+**The defect.** Luminance reached the network through `30*L/(0.02+L)`, a
+Naka-Rushton curve with a fixed semisaturation of 0.02. Measured against the lit
+MuJoCo scene, median receptor luminance is **0.53** -- 27x past semisaturation,
+on the flat top of the curve.
+
+| luminance | sensitivity (mV per unit L) |
+| --- | ---: |
+| 0.02 (semisaturation) | 375.00 |
+| 0.30 | 5.86 |
+| **0.53 (scene median)** | **1.96** |
+| 1.00 | 0.58 |
+
+**192x less sensitive at the operating point the scene occupies.** The swatter
+dropped mean receptor luminance from 0.5338 to 0.2984, a 44% darkening with
+1,147 of 3,335 receptors changing and some going nearly black. Mean drive moved
+27.962 to 27.166. **2.8%.**
+
+`engine.py` already said it: "This is NOT a calibrated phototransduction or
+light-adaptation model."
+
+**The fix.** `connectome_sim/photoreceptor.py` gains `adapted_drive`, and the
+four places that computed the formula inline -- `engine.py`, `native.py`,
+`gpu.py`, `physiology/brain.py` -- now call it. The semisaturation follows a
+slow per-receptor running mean of luminance (500 ms, long relative to the 33 ms
+frame interval so a passing object moves the response rather than being absorbed
+into the operating point), floored at the original 0.02 so darkness cannot
+divide it away. A receptor sitting at ambient now gives half its maximum current
+and the steepest available response to change.
+
+**On by default**, per instruction. `retinal_adaptation_ms=None` restores the
+fixed constant exactly. 28 engine tests pass. Note that visual results recorded
+before this are not comparable: with adaptation the receptors sit near 15 mV
+rather than pinned near 28, so absolute spike counts drop by roughly half while
+the *modulation* rises.
+
+**Result, swatter present versus absent, no current injected anywhere:**
+
+| population | fixed K | adaptive K | factor |
+| --- | ---: | ---: | ---: |
+| photoreceptor | 12,682 | 51,230 | **4.0x** |
+| lamina | 1,181 | 9,605 | **8.1x** |
+| visual projection | 1 | 7 | 7.0x |
+| descending | 5 | 3 | 0.6x |
+| LPLC2 / LC4 / LC6 / LPLC1 | 0 | 0 | -- |
+| DNp01 | 0 | 0 | -- |
+
+**It works, and it is not sufficient.** Four to eight times more signal survives
+the first two stages. The looming detectors are still at exactly zero and the
+giant fibre never fires.
+
+**What that relocates.** The visual projection layer is the wall, not the
+transfer function. 9,201 visual projection cells produce about 770 spikes across
+200 ticks in every condition -- roughly 0.0004 spikes per cell per tick, which
+is silence whatever arrives at them. Light adaptation was a real defect and
+fixing it was necessary; the remaining failure is that lamina output does not
+drive visual projection neurons in this model at all.
+
+**Next:** characterise the stimulus in the fly's own visual field (angular size
+and expansion rate at the ommatidia, and the dorsal coverage of the retina
+mapping) before concluding anything about the escape circuit, and measure what
+lamina drive a visual projection neuron would actually need to fire.
+
+---
+
+## 2026-09-20 — A fly swatter descends on the fly; the looming detectors never fire
+
+**Asked:** add a swatter model, drive it at the fly, see how the fly responds.
+
+**Why it should work.** The connectome contains the entire canonical escape
+pathway: LPLC2 (185 cells), LC4 (126), LC6 (124) and LPLC1 (134) converging on
+the giant fibre DNp01 (2 cells), with GFC1–GFC4 alongside. In a real fly an
+approaching object drives LPLC2 and LC4, the giant fibre fires, the animal takes
+off. All of it is present here and none of it had ever been shown an approaching
+object.
+
+**Ran:** `assets/Fly Swatter.STL` (157 x 91 x 9.5 mm, a real swatter against a
+3 mm fly) added as a mocap body in `fly/body.py` behind `swatter=True`, so the
+approach is prescribed and the swatter's own dynamics stay out of the result.
+`fly/swat.py` drives it from 60 mm to 3 mm over 200 ticks at constant closing
+speed, which gives the accelerating angular expansion looming detectors respond
+to. Conditions: `live`, `frozen` (swatter descends, retina frozen at tick 0) and
+`absent`.
+
+**First result, with the leg/body motor loop running: everything silent.**
+LPLC2, LC4, LC6, LPLC1, DNp01 and GFC1 all exactly zero across 200 ticks, in
+both live and frozen. Live and frozen were also indistinguishable downstream:
+descending 81,264 vs 81,090, DLM 5,860 vs 5,707.
+
+That run was confounded. The motor loop's injected current holds the network at
+**58,920 spikes/tick against a 21,349 resting rate** — the saturated regime
+characterised elsewhere in this project. A looming response cannot be looked for
+inside it.
+
+**Re-run with no motor injection at all** (`--no-motor`), network at rest,
+vision the only input. This is where the answer is:
+
+| population | swatter | no swatter | difference |
+| --- | ---: | ---: | ---: |
+| photoreceptor | 2,788,725 | 2,801,407 | **-12,682** (-0.45%) |
+| lamina | 1,125,643 | 1,124,462 | +1,181 (+0.11%) |
+| visual projection (9,201 cells) | 828 | 829 | **-1** |
+| descending | 911 | 916 | -5 |
+| LPLC2 / LC4 / LC6 / LPLC1 | 0 | 0 | 0 |
+| DNp01 (giant fibre) | 0 | 0 | 0 |
+| VNC motor / DLM | 0 | 0 | 0 |
+
+**The retina sees the swatter.** A dark 91 mm paddle descending overhead
+occludes light, and the photoreceptor population registers 12,682 fewer spikes
+because of it. That is a real, measured visual signal.
+
+**Nothing downstream hears about it.** By the visual projection layer the
+difference is one spike. The looming detectors never fire at all — not weakly,
+not late, zero across 200 ticks in every condition. 9,201 visual projection
+cells produce 828 spikes in total over the whole run, which is silence.
+
+**Conclusion.** The fly does not respond to the swatter, and the reason is not
+that the stimulus is absent or that the escape circuit is missing. The signal
+dies between the lamina and the visual projection neurons. This sharpens the
+earlier finding that "vision reaches the descending neurons and stops": at rest,
+with no injected current anywhere, vision barely reaches the *visual projection*
+neurons either.
+
+**Caveat on the negative.** A stronger claim would need the stimulus
+characterised in the fly's own visual field — angular size and expansion rate at
+the ommatidia, not just object distance — and the dorsal coverage of this
+retina mapping checked. The swatter is directly overhead; if the modelled
+ommatidia have little dorsal field, a real fly would see more of this approach
+than this model can. That is the next thing to check before calling the escape
+pathway unreachable.
+
+---
+
+## 2026-09-20 — A closed leg loop, and a control that cut the wrong half
+
+**Asked:** map leg inputs and outputs naively, for a closed but imperfect loop.
+
+**Ran:** `fly/legs.py` and `fly/walk.py`. Ground contact and joint deviation
+inject current into leg afferents; leg motor-neuron rates set leg joint targets.
+42 driven actuators across six legs.
+
+**First claim, wrong.** Compared against an **open-loop** arm that sensed and ran
+the brain but never wrote the actuators: 4.10 mm of thorax displacement against
+0.012 mm, a factor of 340. That control is nearly tautological -- it shows that
+writing actuators moves the body, which was never in question. The claim was that
+*sensing* drove the motion, and the control cut the motor path instead.
+
+**Re-run with the right controls**, motor path connected throughout, 200 ticks,
+motor gain 5:
+
+| condition | sensory input | motor spikes | displacement |
+| --- | --- | ---: | ---: |
+| closed | live | 10,284 | 4.1644 mm |
+| **frozen sense** | **held at tick 0** | **10,477** | **4.1829 mm** |
+| no sense | none | **0** | 0.0505 mm |
+
+Freezing the input is indistinguishable from live input, 0.4% apart, with
+slightly *more* motor spiking in the frozen arm. With no injection the leg motor
+neurons are silent. **This is a constant open-loop drive, not a closed loop.**
+
+**Why the sensing does nothing.** The tactile channel is `8*tanh(force)` and a
+standing fly's contact force is deep in tanh's flat region, so it sits pinned
+between 7.107 and 8.000 (std 0.437) whether or not a leg is loaded. The
+proprioceptive channel spans 0-1.469 mV against a rheobase near 7, so alone it
+can never make a cell fire. One nearly constant current with no dynamic range --
+the same failure mode as the visual transfer function found later the same day.
+
+**Two bugs that failed silently**, both producing a running, plausible-looking
+loop with missing inputs: contact sensors are registered *unprefixed* while
+actuators carry the fly name, so the first lookup found zero sensors; and the
+sided-instance split gave tactile afferents 1 cell per leg out of 213 until the
+unsided remainder was dealt across both sides.
+
+**Also ran:** `fly/babble.py`, sparse random current across the 19 sensory
+subclasses with input/output logged per tick, as a dataset for fitting which
+inputs move which outputs rather than guessing the next drive point. DLM fired
+at ~22 spikes/tick under random sensory injection, where retinal input alone
+leaves the entire 708-cell VNC motor pool silent.
+
+**Rule carried forward:** cut the thing you are claiming does the work. A control
+on the wrong side of a loop is worse than none, because it comes with a number.
+
+---
+
+## 2026-09-20 — Motor coverage extended to halteres, abdomen and neck; the halteres finally move
+
+**Asked:** continue mapping VNC motor neurons onto the body, beyond the legs.
+
+**Ran:** `fly/motor.py`, a map for the motor subclasses with a body part to
+move, wired into `fly/walk.py` behind `--body`.
+
+| subclass | cells | driven | target |
+| --- | ---: | ---: | --- |
+| leg (fl/ml/hl) | 381 | 328 | 42 leg joint actuators (`fly/legs.py`) |
+| abdomen (ad) | 214 | 158 | 14 abdominal yaw/pitch actuators |
+| neck (nm) | 24 | 24 | head yaw and pitch |
+| haltere (hm) | 16 | 16 | the two haltere pitch actuators |
+| wing (wm) | 67 | 0 | already driven by `fly.controls`' decode |
+| other (xm) | 6 | 0 | bare identifiers, no body part identified |
+
+That is **526 of 708 motor neurons** and **60 of 110 actuators**. The 53
+undriven leg cells are the types with bare identifiers (`MNhl65`); the 49
+undriven abdominal cells are neuromeres A8–A10, which are genital segments this
+model's abdomen does not have. Both are dropped rather than folded into the
+nearest joint.
+
+Grounded in the reconstruction: subclass gives the body region, `somaSide` gives
+L/R for all of them, and `somaNeuromere` gives the abdominal segment A1–A10,
+which lines up directly with the model's abdomen1–7 chain. Inferred: that a
+bilateral sum drives a pitch-like DOF and a left-minus-right difference drives a
+yaw-like one. Head roll is left undriven because nothing separates it from yaw.
+
+**The halteres move for the first time.** This entry's predecessor recorded them
+at **3e-06 rad** over 44 wingbeats, because nothing ever commanded them. Driven
+from their own 16 `hm` motor neurons:
+
+| condition | haltere excursion | motor spikes | thorax displacement |
+| --- | ---: | ---: | ---: |
+| closed (live sense) | 5.033e-04 rad | 10,221 | 2.6083 mm |
+| frozen sense | 5.012e-04 rad | 10,384 | 2.8063 mm |
+| no sense | 8.734e-08 rad | 0 | 0.0389 mm |
+
+168x the previously recorded excursion, and 5,700x the undriven arm here. Four
+of the seven `hm` types are named for real haltere muscles — `hDVM MN` is the
+dorsoventral power muscle, `hi1`, `hi2` and `hiii2` are steering muscles — so
+the side assignment is read from the data, not chosen.
+
+**But the sensing still contributes nothing.** Freezing the sensory input at its
+first-tick value gives 5.012e-04 rad against the live arm's 5.033e-04, a 0.4%
+difference, exactly as it did for the legs. With no injection the motor neurons
+are silent and the halteres return to 8.7e-08 rad. So this is a constant
+open-loop drive that happens to reach more of the body, not feedback.
+
+**What it changes.** 0.0005 rad is about 0.03 degrees, nowhere near a real
+haltere's beat, and the halteres still do not counter-oscillate with the wings.
+The `--haltere-gain` pathway remains inert for the reason previously recorded:
+tethered, the thorax is welded, and there are no sensors on the halteres to read
+deflection from. What has changed is that the actuators are no longer
+uncommanded, which was the first of the three steps this log listed for wiring
+them properly.
+
+**Caveat carried forward:** `--body` is off by default so leg-only runs stay
+comparable with earlier entries.
+
+---
+
 ## 2026-09-19 — Upstream flybody does not fly either, and that was the premise
 
 Ran upstream flybody directly: its own XML, its own centimetre units, its own

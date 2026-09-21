@@ -34,6 +34,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pathlib import Path
+
 import numpy as np
 
 from fly.wing_fluid import add_wing_fluid_geoms
@@ -72,6 +74,7 @@ class FlySim:
     wing_actuator_ids: np.ndarray
     eye_camera_ids: tuple[int, ...]
     tethered: bool = True
+    swatter_mocap: int = -1
 
     @property
     def model(self):
@@ -109,6 +112,8 @@ def build(
     ellipsoid_fluid: bool = False,
     spawn_height_mm: float | None = None,
     scene_camera: bool = True,
+    swatter: bool = False,
+    swatter_start_mm: tuple[float, float, float] = (0.0, 0.0, 60.0),
 ) -> FlySim:
     """Construct and compile the tethered fly.
 
@@ -133,6 +138,13 @@ def build(
         scene_camera: Add an external camera tracking the thorax, so
             `fly.render` has something to look through.  The eye cameras are
             always present.
+        swatter: Add a fly swatter as a mocap body, from `assets/Fly Swatter.STL`
+            (157 x 91 x 9.5 mm, which is a real swatter against a 3 mm fly).
+            Mocap means its pose is written directly rather than simulated, so
+            an approach trajectory is prescribed by the caller and nothing about
+            the swatter's own dynamics enters the result.  It collides with the
+            fly, so an approach that is not stopped will actually hit it.
+        swatter_start_mm: Where the swatter sits before the caller moves it.
     """
     if world not in ("tethered", "flat"):
         raise ValueError(f"Unknown world: {world!r}")
@@ -182,6 +194,8 @@ def build(
     # The freejoint's neutral rotation must be given as a quaternion; FlyGym
     # rejects euler here.
     scene.add_fly(fly, (0, 0, spawn_height_mm), Rotation3D("quat", (1, 0, 0, 0)), **kwargs)
+    if swatter:
+        _add_swatter(scene, swatter_start_mm)
     if scene_camera:
         _add_scene_camera(scene, name, tethered)
     world = scene
@@ -192,6 +206,14 @@ def build(
         model.opt.density = AIR_DENSITY_MM
         model.opt.viscosity = AIR_VISCOSITY_MM
 
+    if swatter:
+        # Resolve once here; the caller needs the mocap index every step and
+        # mj_name2id on a hot loop is wasteful.
+        body_id = mj.mj_name2id(model, mj.mjtObj.mjOBJ_BODY, SWATTER_BODY)
+        swatter_mocap = int(model.body_mocapid[body_id]) if body_id >= 0 else -1
+    else:
+        swatter_mocap = -1
+
     wing_ids = np.array(
         [_actuator_id(model, f"{name}/{a}") for a in WING_ACTUATORS], dtype=np.int32
     )
@@ -200,11 +222,46 @@ def build(
         for c in ("l", "r")
     )
     return FlySim(fly=fly, world=world, sim=sim, wing_actuator_ids=wing_ids,
-                  eye_camera_ids=eye_ids, tethered=tethered)
+                  eye_camera_ids=eye_ids, tethered=tethered,
+                  swatter_mocap=swatter_mocap)
 
 
 # Name of the external camera added by `scene_camera=True`.
 SCENE_CAMERA = "scene_cam"
+SWATTER_BODY = "swatter"
+SWATTER_MESH = Path(__file__).resolve().parents[1] / "assets/Fly Swatter.STL"
+
+
+def _add_swatter(scene, start_mm) -> None:
+    """Add the swatter as a mocap body with a mesh geom.
+
+    Mocap, not a free body: the point of the experiment is a *prescribed*
+    approach, so the trajectory is the independent variable and the swatter's
+    own mass and dynamics stay out of it.  The mesh's origin is one corner of
+    its bounding box, so the geom is offset to sit centred over the mocap point.
+    """
+    import mujoco as mj
+
+    if not SWATTER_MESH.exists():
+        raise FileNotFoundError(f"No swatter mesh at {SWATTER_MESH}")
+    spec = scene.mjcf_root
+    mesh = spec.add_mesh()
+    mesh.name = SWATTER_BODY
+    mesh.file = str(SWATTER_MESH)
+    body = spec.worldbody.add_body()
+    body.name = SWATTER_BODY
+    body.mocap = True
+    body.pos = tuple(float(x) for x in start_mm)
+    geom = body.add_geom()
+    geom.name = SWATTER_BODY
+    geom.type = mj.mjtGeom.mjGEOM_MESH
+    geom.meshname = SWATTER_BODY
+    # Centre the paddle head over the mocap point rather than the mesh's own
+    # corner origin, so "swatter position" means the thing above the fly.
+    geom.pos = (-45.0, -45.0, 0.0)
+    geom.rgba = (0.15, 0.15, 0.18, 1.0)
+    geom.condim = 3
+    geom.density = 200.0
 
 
 def _add_scene_camera(scene, name: str, tethered: bool) -> None:

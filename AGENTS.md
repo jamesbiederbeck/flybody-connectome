@@ -1,5 +1,9 @@
 # flybody-connectome constraints
 
+- Read `../connectome-lab/REPRODUCIBILITY.md` before touching `connectome_sim`,
+  seeding, or anything cross-episode: infrastructure-level reproducibility
+  rules (submodule/symlink handling, GPU/render backend determinism,
+  third-party env reseeding) live there, not duplicated per-repo.
 - Vision does not reach the wing motor neurons in MaleCNS v1.0. Measured: all
   708 VNC motor neurons are silent under retinal drive while DNp20 and DNpe017
   fire. Do not "fix" this by wiring a shortcut and presenting it as connectome
